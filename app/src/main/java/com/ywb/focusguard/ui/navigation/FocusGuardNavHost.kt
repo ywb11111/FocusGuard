@@ -1,0 +1,70 @@
+package com.ywb.focusguard.ui.navigation
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import com.ywb.focusguard.ui.screen.OnboardingScreen
+import com.ywb.focusguard.ui.screen.PermissionGuideScreen
+import com.ywb.focusguard.ui.screen.ReportsRoute
+import com.ywb.focusguard.ui.screen.SessionDetailScreen
+import com.ywb.focusguard.ui.screen.SessionRoute
+import com.ywb.focusguard.ui.screen.SettingsRoute
+import com.ywb.focusguard.ui.screen.TodayRoute
+
+@Composable
+fun FocusGuardNavHost(
+    navController: NavHostController,
+    modifier: Modifier = Modifier
+) {
+    NavHost(
+        navController = navController,
+        startDestination = Destination.Today.route,
+        modifier = modifier
+    ) {
+        composable(Destination.Today.route) {
+            TodayRoute(
+                onStartFocus = { navController.navigate(Destination.Session.route) },
+                onOpenSettings = { navController.navigate(Destination.Settings.route) },
+                onOpenSessionDetail = { id ->
+                    navController.navigate(Destination.SessionDetail.createRoute(id))
+                }
+            )
+        }
+        composable(Destination.Session.route) {
+            SessionRoute(
+                onFinish = { id -> navController.navigate(Destination.SessionDetail.createRoute(id)) }
+            )
+        }
+        composable(Destination.Reports.route) {
+            ReportsRoute(
+                onOpenSessionDetail = { id ->
+                    navController.navigate(Destination.SessionDetail.createRoute(id))
+                }
+            )
+        }
+        composable(Destination.Settings.route) {
+            SettingsRoute(
+                onOpenPermissionGuide = { navController.navigate(Destination.PermissionGuide.route) }
+            )
+        }
+        composable(Destination.PermissionGuide.route) {
+            PermissionGuideScreen()
+        }
+        composable(Destination.Onboarding.route) {
+            OnboardingScreen()
+        }
+        composable(
+            route = Destination.SessionDetail.route,
+            arguments = listOf(navArgument(Destination.SessionDetail.ARG_SESSION_ID) {
+                type = NavType.LongType
+            })
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getLong(Destination.SessionDetail.ARG_SESSION_ID) ?: 0L
+            SessionDetailScreen(sessionId = sessionId)
+        }
+    }
+}
