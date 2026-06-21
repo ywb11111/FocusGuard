@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SampleDao {
+    // 采样表通过 sessionId 关联一次专注记录：一条 FocusSession 可以对应多条噪声/光照/移动样本。
     @Query("SELECT * FROM noise_samples WHERE sessionId = :sessionId ORDER BY timestamp ASC")
     fun observeNoiseSamples(sessionId: Long): Flow<List<NoiseSampleEntity>>
 

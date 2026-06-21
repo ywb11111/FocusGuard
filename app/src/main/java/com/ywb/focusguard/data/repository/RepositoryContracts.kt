@@ -11,6 +11,8 @@ import com.ywb.focusguard.domain.model.TodaySummary
 import com.ywb.focusguard.domain.model.UserSettings
 import kotlinx.coroutines.flow.Flow
 
+// Repository 是 UI/ViewModel 和具体数据来源之间的边界。
+// ViewModel 依赖接口而不是 Room/SensorManager/AudioRecord，后续替换实现时 UI 不需要跟着大改。
 interface FocusRepository {
     fun observeTodaySummary(): Flow<TodaySummary>
     fun observeSessions(): Flow<List<FocusSession>>
@@ -22,6 +24,7 @@ interface FocusRepository {
     suspend fun saveMotionEvent(sessionId: Long, event: MotionSample)
 }
 
+// 环境数据未来会来自麦克风、光照传感器、加速度计；当前先用接口把调用方式固定下来。
 interface EnvironmentRepository {
     fun observeNoise(): Flow<NoiseSample>
     fun observeLight(): Flow<LightSample>
@@ -29,6 +32,7 @@ interface EnvironmentRepository {
     fun observeEnvironmentSnapshot(): Flow<EnvironmentSnapshot>
 }
 
+// 设置数据未来会落到 DataStore；现在先保留接口，避免 UI 直接依赖存储细节。
 interface SettingsRepository {
     val settings: Flow<UserSettings>
     suspend fun updateNoiseThreshold(value: Float)

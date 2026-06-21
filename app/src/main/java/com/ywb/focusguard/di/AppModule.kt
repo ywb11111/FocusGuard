@@ -22,6 +22,7 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
+    // @Binds 告诉 Hilt：当某处需要 FocusRepository 接口时，实际提供 FocusRepositoryImpl。
     @Binds
     @Singleton
     abstract fun bindFocusRepository(repository: FocusRepositoryImpl): FocusRepository
@@ -38,6 +39,7 @@ abstract class RepositoryModule {
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
+    // 数据库是全局单例。多个 Repository/DAO 共用同一个 RoomDatabase 实例，避免重复打开数据库。
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): FocusGuardDatabase =

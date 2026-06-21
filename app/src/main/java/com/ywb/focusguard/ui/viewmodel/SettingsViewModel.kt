@@ -14,6 +14,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     settingsRepository: SettingsRepository
 ) : ViewModel() {
+    // 当前设置仓库还是内存实现；后续接 DataStore 后，这里的 UI 收集方式不用变。
     val uiState = settingsRepository.settings
         .map { settings -> SettingsUiState(settings = settings) }
         .stateIn(

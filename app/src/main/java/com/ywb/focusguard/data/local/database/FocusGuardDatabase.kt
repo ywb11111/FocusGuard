@@ -9,6 +9,8 @@ import com.ywb.focusguard.data.local.entity.LightSampleEntity
 import com.ywb.focusguard.data.local.entity.MotionEventEntity
 import com.ywb.focusguard.data.local.entity.NoiseSampleEntity
 
+// Room 数据库入口：集中声明有哪些表，以及能拿到哪些 DAO。
+// Entity 负责“怎么存”，DAO 负责“怎么查/写”，Repository 负责“怎么给业务层使用”。
 @Database(
     entities = [
         FocusSessionEntity::class,

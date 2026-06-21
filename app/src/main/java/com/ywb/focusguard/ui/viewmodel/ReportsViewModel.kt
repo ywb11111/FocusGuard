@@ -14,6 +14,7 @@ import javax.inject.Inject
 class ReportsViewModel @Inject constructor(
     focusRepository: FocusRepository
 ) : ViewModel() {
+    // 报告页需要历史列表和统计摘要，ViewModel 在这里把它们组合成 ReportsUiState。
     val uiState = combine(
         focusRepository.observeSessions(),
         focusRepository.observeTodaySummary()

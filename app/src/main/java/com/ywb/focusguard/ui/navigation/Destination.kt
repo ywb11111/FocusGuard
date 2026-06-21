@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 
+// 所有页面路由集中放在这里，避免字符串散落在各个 Screen 中导致跳转难维护。
 sealed class Destination(val route: String) {
     data object Today : Destination("today")
     data object Session : Destination("session")
@@ -16,6 +17,8 @@ sealed class Destination(val route: String) {
     data object Onboarding : Destination("onboarding")
     data object SessionDetail : Destination("session/{sessionId}") {
         const val ARG_SESSION_ID = "sessionId"
+
+        // 带参数页面不要手写 "session/$id"，统一通过函数生成，后续改路由格式时更安全。
         fun createRoute(sessionId: Long) = "session/$sessionId"
     }
 }

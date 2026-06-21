@@ -2,6 +2,7 @@ package com.ywb.focusguard.domain.analyzer
 
 import com.ywb.focusguard.domain.model.FocusScore
 
+// 评分逻辑放在 domain 层，保持可解释、可测试，也方便面试时讲清楚每个扣分项来自哪里。
 class FocusScoreAnalyzer {
     fun calculate(
         averageNoiseDb: Float,

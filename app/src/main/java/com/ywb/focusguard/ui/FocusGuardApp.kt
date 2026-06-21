@@ -16,6 +16,7 @@ import com.ywb.focusguard.ui.navigation.topLevelDestinations
 
 @Composable
 fun FocusGuardApp() {
+    // NavController 是 Compose Navigation 的核心对象，负责页面跳转和返回栈管理。
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -28,6 +29,7 @@ fun FocusGuardApp() {
                         selected = currentRoute == item.destination.route,
                         onClick = {
                             navController.navigate(item.destination.route) {
+                                // 切换底部 Tab 时保留各 Tab 的页面状态，避免每次点击都重新创建整条导航栈。
                                 popUpTo(navController.graph.startDestinationId) {
                                     saveState = true
                                 }

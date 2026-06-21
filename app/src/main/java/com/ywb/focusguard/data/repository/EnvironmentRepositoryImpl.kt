@@ -17,6 +17,7 @@ import javax.inject.Singleton
 class EnvironmentRepositoryImpl @Inject constructor(
     private val environmentAnalyzer: EnvironmentAnalyzer
 ) : EnvironmentRepository {
+    // 当前是固定演示数据。真实噪声数据会来自 AudioRecord，并且需要权限、线程和资源释放处理。
     override fun observeNoise(): Flow<NoiseSample> = flowOf(
         NoiseSample(
             timestamp = System.currentTimeMillis(),
@@ -25,6 +26,7 @@ class EnvironmentRepositoryImpl @Inject constructor(
         )
     )
 
+    // 当前是固定演示数据。真实光照数据会来自 SensorManager.TYPE_LIGHT。
     override fun observeLight(): Flow<LightSample> = flowOf(
         LightSample(
             timestamp = System.currentTimeMillis(),
@@ -33,6 +35,7 @@ class EnvironmentRepositoryImpl @Inject constructor(
         )
     )
 
+    // 当前是固定演示数据。真实移动数据会来自加速度计，并经过防抖/阈值判断。
     override fun observeMotion(): Flow<MotionSample> = flowOf(
         MotionSample(
             timestamp = System.currentTimeMillis(),
@@ -41,6 +44,7 @@ class EnvironmentRepositoryImpl @Inject constructor(
         )
     )
 
+    // combine 把三条独立数据流合成一个环境快照，ViewModel 收一个 Flow 就能拿到完整环境状态。
     override fun observeEnvironmentSnapshot(): Flow<EnvironmentSnapshot> =
         combine(observeNoise(), observeLight(), observeMotion()) { noise, light, motion ->
             EnvironmentSnapshot(

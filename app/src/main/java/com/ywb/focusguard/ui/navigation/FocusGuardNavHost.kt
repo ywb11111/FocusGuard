@@ -20,6 +20,7 @@ fun FocusGuardNavHost(
     navController: NavHostController,
     modifier: Modifier = Modifier
 ) {
+    // NavHost 是 route 和 Composable 页面之间的映射表：导航到某个 route 时，就显示对应页面。
     NavHost(
         navController = navController,
         startDestination = Destination.Today.route,
@@ -63,6 +64,7 @@ fun FocusGuardNavHost(
                 type = NavType.LongType
             })
         ) { backStackEntry ->
+            // Navigation 传参最终都会从 backStackEntry 取出；这里拿到 sessionId 后交给详情页显示。
             val sessionId = backStackEntry.arguments?.getLong(Destination.SessionDetail.ARG_SESSION_ID) ?: 0L
             SessionDetailScreen(sessionId = sessionId)
         }

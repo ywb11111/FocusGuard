@@ -22,6 +22,9 @@ class FocusRepositoryImpl @Inject constructor(
     private val scoreAnalyzer: FocusScoreAnalyzer
 ) : FocusRepository {
     private val now = System.currentTimeMillis()
+
+    // 当前阶段仍是内存演示数据，目的是先让 UI 和数据流跑通。
+    // 下一阶段会把这里替换为 Room DAO 查询和写入。
     private val sessions = MutableStateFlow(
         listOf(
             FocusSession(
@@ -40,6 +43,7 @@ class FocusRepositoryImpl @Inject constructor(
         )
     )
 
+    // 今日统计由会话列表派生出来。真实版本会考虑“今天 0 点之后”的过滤和 Room 聚合查询。
     override fun observeTodaySummary(): Flow<TodaySummary> = sessions.map { items ->
         TodaySummary(
             totalFocusMillis = items.sumOf { it.durationMillis },
@@ -51,6 +55,7 @@ class FocusRepositoryImpl @Inject constructor(
 
     override fun observeSessions(): Flow<List<FocusSession>> = sessions
 
+    // 详情页需要会话本身 + 三类采样数据 + 评分拆解，这里先用 demo 样本拼出完整结构。
     override fun observeSessionDetail(sessionId: Long): Flow<SessionDetail?> = sessions.map { items ->
         val session = items.firstOrNull { it.id == sessionId } ?: return@map null
         val noiseSamples = demoNoiseSamples(session.startTime)
@@ -72,11 +77,13 @@ class FocusRepositoryImpl @Inject constructor(
         )
     }
 
+    // 当前只分配 id，不真正创建数据库记录；Room 接入后这里会插入一条开始中的会话。
     override suspend fun startSession(config: FocusConfig): Long {
         val nextId = (sessions.value.maxOfOrNull { it.id } ?: 0L) + 1L
         return nextId
     }
 
+    // 当前 finish 会生成一条完整记录并放进内存列表；下一步要改成写入 focus_sessions 表。
     override suspend fun finishSession(sessionId: Long): FocusSession {
         val finishedAt = System.currentTimeMillis()
         val startedAt = finishedAt - 25 * 60 * 1000L
@@ -104,6 +111,7 @@ class FocusRepositoryImpl @Inject constructor(
         return session
     }
 
+    // 采样保存接口先留空，后续接入光照、移动、噪声时逐步实现。
     override suspend fun saveNoiseSample(sessionId: Long, sample: NoiseSample) = Unit
     override suspend fun saveLightSample(sessionId: Long, sample: LightSample) = Unit
     override suspend fun saveMotionEvent(sessionId: Long, event: MotionSample) = Unit

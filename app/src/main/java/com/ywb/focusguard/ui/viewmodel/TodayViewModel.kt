@@ -16,6 +16,8 @@ class TodayViewModel @Inject constructor(
     environmentRepository: EnvironmentRepository,
     focusRepository: FocusRepository
 ) : ViewModel() {
+    // combine 用来把多个数据源合成一个页面状态：环境快照 + 今日统计 + 最近记录。
+    // 这样 Screen 只需要收集一个 uiState，而不是同时订阅好几个 Flow。
     val uiState = combine(
         environmentRepository.observeEnvironmentSnapshot(),
         focusRepository.observeTodaySummary(),
@@ -29,6 +31,7 @@ class TodayViewModel @Inject constructor(
         )
     }.stateIn(
         scope = viewModelScope,
+        // 页面停止观察 5 秒后再停止上游 Flow，避免短暂切页导致频繁重启数据流。
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = TodayUiState()
     )

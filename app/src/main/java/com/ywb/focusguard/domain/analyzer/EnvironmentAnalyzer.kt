@@ -6,6 +6,7 @@ import com.ywb.focusguard.domain.model.LightLevel
 import com.ywb.focusguard.domain.model.MotionSample
 import com.ywb.focusguard.domain.model.NoiseLevel
 
+// 环境判断规则放在独立 Analyzer 中，避免 ViewModel 同时承担状态管理和业务计算。
 class EnvironmentAnalyzer {
     fun statusFor(
         noiseLevel: NoiseLevel,
