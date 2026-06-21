@@ -2,6 +2,7 @@ package com.ywb.focusguard.di
 
 import android.content.Context
 import androidx.room.Room
+import com.ywb.focusguard.data.local.dao.FocusSessionDao
 import com.ywb.focusguard.data.local.database.FocusGuardDatabase
 import com.ywb.focusguard.data.repository.EnvironmentRepository
 import com.ywb.focusguard.data.repository.EnvironmentRepositoryImpl
@@ -48,6 +49,11 @@ object AppModule {
             FocusGuardDatabase::class.java,
             "focus_guard.db"
         ).build()
+
+    @Provides
+    @Singleton
+    fun provideFocusSessionDao(database: FocusGuardDatabase): FocusSessionDao =
+        database.focusSessionDao()
 
     @Provides
     @Singleton

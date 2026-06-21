@@ -1,5 +1,8 @@
 package com.ywb.focusguard.data.repository
 
+import com.ywb.focusguard.data.local.dao.FocusSessionDao
+import com.ywb.focusguard.data.local.entity.FocusSessionEntity
+import com.ywb.focusguard.data.local.mapper.toDomain
 import com.ywb.focusguard.domain.analyzer.FocusScoreAnalyzer
 import com.ywb.focusguard.domain.model.FocusConfig
 import com.ywb.focusguard.domain.model.FocusScore
@@ -12,93 +15,94 @@ import com.ywb.focusguard.domain.model.NoiseSample
 import com.ywb.focusguard.domain.model.SessionDetail
 import com.ywb.focusguard.domain.model.TodaySummary
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class FocusRepositoryImpl @Inject constructor(
+    private val focusSessionDao: FocusSessionDao,
     private val scoreAnalyzer: FocusScoreAnalyzer
 ) : FocusRepository {
-    private val now = System.currentTimeMillis()
-
-    // 当前阶段仍是内存演示数据，目的是先让 UI 和数据流跑通。
-    // 下一阶段会把这里替换为 Room DAO 查询和写入。
-    private val sessions = MutableStateFlow(
-        listOf(
-            FocusSession(
-                id = 1,
-                startTime = now - 2 * 60 * 60 * 1000L,
-                endTime = now - 75 * 60 * 1000L,
-                durationMillis = 45 * 60 * 1000L,
-                averageNoiseDb = 42f,
-                maxNoiseDb = 58f,
-                averageLightLux = 180f,
-                movementCount = 2,
-                distractionCount = 1,
-                score = 88,
-                note = "晚间学习"
-            )
-        )
-    )
-
-    // 今日统计由会话列表派生出来。真实版本会考虑“今天 0 点之后”的过滤和 Room 聚合查询。
-    override fun observeTodaySummary(): Flow<TodaySummary> = sessions.map { items ->
+    // 今日统计先在 Repository 中由 Room Flow 派生，后续数据量变大后可以下沉为 Room 聚合 SQL。
+    override fun observeTodaySummary(): Flow<TodaySummary> = observeSessions().map { items ->
+        val todayStart = todayStartMillis()
+        val todaySessions = items.filter { it.startTime >= todayStart && it.endTime != null }
         TodaySummary(
-            totalFocusMillis = items.sumOf { it.durationMillis },
-            averageScore = items.map { it.score }.average().takeIf { !it.isNaN() }?.toInt() ?: 0,
-            distractionCount = items.sumOf { it.distractionCount },
-            sessionCount = items.size
+            totalFocusMillis = todaySessions.sumOf { it.durationMillis },
+            averageScore = todaySessions.map { it.score }.average().takeIf { !it.isNaN() }?.toInt() ?: 0,
+            distractionCount = todaySessions.sumOf { it.distractionCount },
+            sessionCount = todaySessions.size
         )
     }
 
-    override fun observeSessions(): Flow<List<FocusSession>> = sessions
+    override fun observeSessions(): Flow<List<FocusSession>> =
+        focusSessionDao.observeSessions().map { entities ->
+            entities
+                .filter { it.endTime != null }
+                .map { it.toDomain() }
+        }
 
-    // 详情页需要会话本身 + 三类采样数据 + 评分拆解，这里先用 demo 样本拼出完整结构。
-    override fun observeSessionDetail(sessionId: Long): Flow<SessionDetail?> = sessions.map { items ->
-        val session = items.firstOrNull { it.id == sessionId } ?: return@map null
-        val noiseSamples = demoNoiseSamples(session.startTime)
-        val lightSamples = demoLightSamples(session.startTime)
-        val motionEvents = demoMotionSamples(session.startTime)
-        SessionDetail(
-            session = session,
-            noiseSamples = noiseSamples,
-            lightSamples = lightSamples,
-            motionEvents = motionEvents,
-            score = FocusScore(
-                total = session.score,
-                noisePenalty = 8,
-                lightPenalty = 0,
-                motionPenalty = 3,
-                distractionPenalty = 5,
-                suggestions = listOf("整体环境稳定，下次可以尝试延长到 45 分钟。")
+    // 详情页先读取真实会话记录，采样曲线仍使用 demo 样本；传感器阶段再替换为采样表查询。
+    override fun observeSessionDetail(sessionId: Long): Flow<SessionDetail?> =
+        focusSessionDao.observeSession(sessionId).map { entity ->
+            val session = entity?.toDomain() ?: return@map null
+            val noiseSamples = demoNoiseSamples(session.startTime)
+            val lightSamples = demoLightSamples(session.startTime)
+            val motionEvents = demoMotionSamples(session.startTime)
+            SessionDetail(
+                session = session,
+                noiseSamples = noiseSamples,
+                lightSamples = lightSamples,
+                motionEvents = motionEvents,
+                score = FocusScore(
+                    total = session.score,
+                    noisePenalty = 8,
+                    lightPenalty = 0,
+                    motionPenalty = 3,
+                    distractionPenalty = 5,
+                    suggestions = listOf("整体环境稳定，下次可以尝试延长到 45 分钟。")
+                )
+            )
+        }
+
+    override suspend fun startSession(config: FocusConfig): Long {
+        val now = System.currentTimeMillis()
+        // 进行中记录先把 endTime 设为 null，其他分析字段使用默认值。
+        // 结束时 Repository 会用同一个 id 更新完整结果。
+        return focusSessionDao.insertSession(
+            FocusSessionEntity(
+                startTime = now,
+                endTime = null,
+                durationMillis = 0L,
+                averageNoiseDb = 0f,
+                maxNoiseDb = 0f,
+                averageLightLux = 0f,
+                movementCount = 0,
+                distractionCount = 0,
+                score = 0,
+                note = "进行中"
             )
         )
     }
 
-    // 当前只分配 id，不真正创建数据库记录；Room 接入后这里会插入一条开始中的会话。
-    override suspend fun startSession(config: FocusConfig): Long {
-        val nextId = (sessions.value.maxOfOrNull { it.id } ?: 0L) + 1L
-        return nextId
-    }
-
-    // 当前 finish 会生成一条完整记录并放进内存列表；下一步要改成写入 focus_sessions 表。
-    override suspend fun finishSession(sessionId: Long): FocusSession {
+    override suspend fun finishSession(sessionId: Long, durationMillis: Long): FocusSession {
         val finishedAt = System.currentTimeMillis()
-        val startedAt = finishedAt - 25 * 60 * 1000L
+        val existing = focusSessionDao.getSession(sessionId)
+        val startedAt = existing?.startTime ?: finishedAt
+        val focusDurationMillis = durationMillis.coerceAtLeast(0L)
         val score = scoreAnalyzer.calculate(
             averageNoiseDb = 44f,
             averageLightLux = 220f,
             movementCount = 1,
             distractionCount = 0,
-            durationMillis = 25 * 60 * 1000L
+            durationMillis = focusDurationMillis
         )
-        val session = FocusSession(
-            id = sessionId,
-            startTime = startedAt,
+        focusSessionDao.updateFinishedSession(
+            sessionId = sessionId,
             endTime = finishedAt,
-            durationMillis = 25 * 60 * 1000L,
+            durationMillis = focusDurationMillis,
             averageNoiseDb = 44f,
             maxNoiseDb = 60f,
             averageLightLux = 220f,
@@ -107,8 +111,19 @@ class FocusRepositoryImpl @Inject constructor(
             score = score.total,
             note = "手动结束"
         )
-        sessions.value = listOf(session) + sessions.value.filterNot { it.id == sessionId }
-        return session
+        return FocusSession(
+            id = sessionId,
+            startTime = startedAt,
+            endTime = finishedAt,
+            durationMillis = focusDurationMillis,
+            averageNoiseDb = 44f,
+            maxNoiseDb = 60f,
+            averageLightLux = 220f,
+            movementCount = 1,
+            distractionCount = 0,
+            score = score.total,
+            note = "手动结束"
+        )
     }
 
     // 采样保存接口先留空，后续接入光照、移动、噪声时逐步实现。
@@ -136,4 +151,13 @@ class FocusRepositoryImpl @Inject constructor(
         MotionSample(start + 12 * 60_000L, 11.2f, true),
         MotionSample(start + 31 * 60_000L, 10.6f, true)
     )
+
+    private fun todayStartMillis(): Long {
+        val calendar = Calendar.getInstance()
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        return calendar.timeInMillis
+    }
 }

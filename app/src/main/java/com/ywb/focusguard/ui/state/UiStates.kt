@@ -50,7 +50,7 @@ sealed interface SessionUiState {
         val movementCount: Int
     ) : SessionUiState
 
-    // 结束状态保存本次会话结果；下一阶段会把这里的结果写入 Room。
+    // 结束状态展示 Repository 返回的本次会话结果；数据本身已经由 Repository 写入 Room。
     data class Finished(
         val session: FocusSession
     ) : SessionUiState

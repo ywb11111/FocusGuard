@@ -18,7 +18,7 @@ interface FocusRepository {
     fun observeSessions(): Flow<List<FocusSession>>
     fun observeSessionDetail(sessionId: Long): Flow<SessionDetail?>
     suspend fun startSession(config: FocusConfig): Long
-    suspend fun finishSession(sessionId: Long): FocusSession
+    suspend fun finishSession(sessionId: Long, durationMillis: Long): FocusSession
     suspend fun saveNoiseSample(sessionId: Long, sample: NoiseSample)
     suspend fun saveLightSample(sessionId: Long, sample: LightSample)
     suspend fun saveMotionEvent(sessionId: Long, event: MotionSample)

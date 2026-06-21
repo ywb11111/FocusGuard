@@ -3,9 +3,9 @@ package com.ywb.focusguard.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ywb.focusguard.data.repository.EnvironmentRepository
+import com.ywb.focusguard.data.repository.FocusRepository
 import com.ywb.focusguard.domain.model.EnvironmentSnapshot
 import com.ywb.focusguard.domain.model.FocusConfig
-import com.ywb.focusguard.domain.model.FocusSession
 import com.ywb.focusguard.domain.model.LightLevel
 import com.ywb.focusguard.ui.state.SessionUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,7 +23,8 @@ import kotlin.time.Duration.Companion.milliseconds
 
 @HiltViewModel
 class SessionViewModel @Inject constructor(
-    environmentRepository: EnvironmentRepository
+    environmentRepository: EnvironmentRepository,
+    private val focusRepository: FocusRepository
 ) : ViewModel() {
     private val defaultConfig = FocusConfig(durationMinutes = 25)
     private val sessionDurationMillis = defaultConfig.durationMinutes * 60 * 1000L
@@ -46,9 +47,7 @@ class SessionViewModel @Inject constructor(
 
     // tickerJob 表示当前计时协程。暂停、结束、重置时必须 cancel，避免多个计时器同时跑。
     private var tickerJob: Job? = null
-    private var nextSessionId = 1L
     private var activeSessionId = 0L
-    private var sessionStartTime = 0L
     // runStartedAt 表示“本轮运行”开始时间；暂停再继续时会重新赋值。
     private var runStartedAt = 0L
     // accumulatedMillis 保存暂停前已经累计的时长。继续后用它加上本轮运行时间。
@@ -71,13 +70,14 @@ class SessionViewModel @Inject constructor(
 
     fun startSession() {
         val now = System.currentTimeMillis()
-        activeSessionId = nextSessionId++
-        sessionStartTime = now
-        runStartedAt = now
-        accumulatedMillis = 0L
-        // 先立即发出 Running 状态，让用户点开始后 UI 立刻切换，而不是等 1 秒。
-        emitRunningState(elapsedMillis = 0L)
-        startTicker()
+        viewModelScope.launch {
+            activeSessionId = focusRepository.startSession(defaultConfig)
+            runStartedAt = now
+            accumulatedMillis = 0L
+            // 先立即发出 Running 状态，让用户点开始后 UI 立刻切换，而不是等 1 秒。
+            emitRunningState(elapsedMillis = 0L)
+            startTicker()
+        }
     }
 
     fun pauseSession() {
@@ -111,7 +111,6 @@ class SessionViewModel @Inject constructor(
     fun resetSession() {
         tickerJob?.cancel()
         activeSessionId = 0L
-        sessionStartTime = 0L
         runStartedAt = 0L
         accumulatedMillis = 0L
         _uiState.value = SessionUiState.Ready(defaultConfig, environment.value)
@@ -147,23 +146,13 @@ class SessionViewModel @Inject constructor(
     }
 
     private fun completeSession(elapsedMillis: Long) {
-        val now = System.currentTimeMillis()
-        val snapshot = environment.value
-        // 当前阶段只生成内存中的 FocusSession；下一阶段会通过 Repository 写入 Room。
-        val session = FocusSession(
-            id = activeSessionId,
-            startTime = sessionStartTime,
-            endTime = now,
-            durationMillis = elapsedMillis,
-            averageNoiseDb = snapshot?.noise?.decibel ?: 0f,
-            maxNoiseDb = snapshot?.noise?.decibel ?: 0f,
-            averageLightLux = snapshot?.light?.lux ?: 0f,
-            movementCount = if (snapshot?.motion?.isSignificantMove == true) 1 else 0,
-            distractionCount = 0,
-            score = if (elapsedMillis >= 10 * 60 * 1000L) 90 else 82,
-            note = "内存计时记录"
-        )
-        _uiState.value = SessionUiState.Finished(session)
+        val sessionId = activeSessionId
+        if (sessionId == 0L) return
+        viewModelScope.launch {
+            // ViewModel 负责算出暂停后的净专注时长，Repository 负责保存这次会话结果。
+            val session = focusRepository.finishSession(sessionId, elapsedMillis)
+            _uiState.value = SessionUiState.Finished(session)
+        }
     }
 
     private fun currentElapsedMillis(): Long {
