@@ -18,6 +18,7 @@ import com.ywb.focusguard.ui.screen.TodayRoute
 @Composable
 fun FocusGuardNavHost(
     navController: NavHostController,
+    onStartFocus: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // NavHost 是 route 和 Composable 页面之间的映射表：导航到某个 route 时，就显示对应页面。
@@ -28,7 +29,7 @@ fun FocusGuardNavHost(
     ) {
         composable(Destination.Today.route) {
             TodayRoute(
-                onStartFocus = { navController.navigate(Destination.Session.route) },
+                onStartFocus = onStartFocus,
                 onOpenSettings = { navController.navigate(Destination.Settings.route) },
                 onOpenSessionDetail = { id ->
                     navController.navigate(Destination.SessionDetail.createRoute(id))

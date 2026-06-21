@@ -15,11 +15,11 @@ sealed class Destination(val route: String) {
     data object Settings : Destination("settings")
     data object PermissionGuide : Destination("permission_guide")
     data object Onboarding : Destination("onboarding")
-    data object SessionDetail : Destination("session/{sessionId}") {
+    data object SessionDetail : Destination("session_detail/{sessionId}") {
         const val ARG_SESSION_ID = "sessionId"
 
-        // 带参数页面不要手写 "session/$id"，统一通过函数生成，后续改路由格式时更安全。
-        fun createRoute(sessionId: Long) = "session/$sessionId"
+        // 带参数页面不要手写 "session_detail/$id"，统一通过函数生成，后续改路由格式时更安全。
+        fun createRoute(sessionId: Long) = "session_detail/$sessionId"
     }
 }
 
