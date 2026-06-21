@@ -10,7 +10,7 @@ import androidx.navigation.navArgument
 import com.ywb.focusguard.ui.screen.OnboardingScreen
 import com.ywb.focusguard.ui.screen.PermissionGuideScreen
 import com.ywb.focusguard.ui.screen.ReportsRoute
-import com.ywb.focusguard.ui.screen.SessionDetailScreen
+import com.ywb.focusguard.ui.screen.SessionDetailRoute
 import com.ywb.focusguard.ui.screen.SessionRoute
 import com.ywb.focusguard.ui.screen.SettingsRoute
 import com.ywb.focusguard.ui.screen.TodayRoute
@@ -64,10 +64,8 @@ fun FocusGuardNavHost(
             arguments = listOf(navArgument(Destination.SessionDetail.ARG_SESSION_ID) {
                 type = NavType.LongType
             })
-        ) { backStackEntry ->
-            // Navigation 传参最终都会从 backStackEntry 取出；这里拿到 sessionId 后交给详情页显示。
-            val sessionId = backStackEntry.arguments?.getLong(Destination.SessionDetail.ARG_SESSION_ID) ?: 0L
-            SessionDetailScreen(sessionId = sessionId)
+        ) {
+            SessionDetailRoute()
         }
     }
 }

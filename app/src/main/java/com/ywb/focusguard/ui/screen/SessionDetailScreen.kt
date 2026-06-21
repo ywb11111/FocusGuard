@@ -11,16 +11,40 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ywb.focusguard.ui.component.MetricCard
 import com.ywb.focusguard.ui.component.SectionHeader
 import com.ywb.focusguard.ui.component.SimpleLineChart
+import com.ywb.focusguard.ui.state.SessionDetailUiState
+import com.ywb.focusguard.ui.viewmodel.SessionDetailViewModel
+
+@Composable
+fun SessionDetailRoute(
+    viewModel: SessionDetailViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    SessionDetailScreen(uiState = uiState)
+}
 
 @Composable
 fun SessionDetailScreen(
-    sessionId: Long
+    uiState: SessionDetailUiState
+) {
+    when (uiState) {
+        SessionDetailUiState.Loading -> SessionDetailMessage("正在读取专注详情")
+        is SessionDetailUiState.Empty -> SessionDetailMessage(uiState.message)
+        is SessionDetailUiState.Content -> SessionDetailContent(uiState)
+    }
+}
+
+@Composable
+private fun SessionDetailContent(
+    uiState: SessionDetailUiState.Content
 ) {
     Column(
         modifier = Modifier
@@ -30,7 +54,7 @@ fun SessionDetailScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "专注详情 #$sessionId",
+            text = uiState.title,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.SemiBold
         )
@@ -38,18 +62,38 @@ fun SessionDetailScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            MetricCard("时长", "45m", Modifier.weight(1f))
-            MetricCard("评分", "88", Modifier.weight(1f))
+            MetricCard("时长", uiState.durationText, Modifier.weight(1f))
+            MetricCard("评分", uiState.scoreText, Modifier.weight(1f))
         }
         SectionHeader(title = "评分拆解")
-        Text("噪声 -8 · 光照 -0 · 移动 -3 · 分心 -5")
+        Text(uiState.scoreBreakdownText)
         SectionHeader(title = "噪声曲线")
-        SimpleLineChart(values = listOf(42f, 40f, 45f, 58f, 52f, 43f, 41f))
+        SimpleLineChart(values = uiState.noiseValues.ifEmpty { listOf(0f) })
         SectionHeader(title = "光照曲线")
-        SimpleLineChart(values = listOf(160f, 172f, 180f, 188f, 176f, 184f, 190f))
+        SimpleLineChart(values = uiState.lightValues.ifEmpty { listOf(0f) })
         SectionHeader(title = "建议")
         Text(
-            text = "整体环境稳定。后续接入真实采样后，这里会显示由规则评分生成的可解释建议。",
+            text = uiState.suggestionText,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun SessionDetailMessage(message: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = "专注详情",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = message,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
