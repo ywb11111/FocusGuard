@@ -1,8 +1,8 @@
 package com.ywb.focusguard.data.repository
 
+import com.ywb.focusguard.data.sensor.LightSensorDataSource
 import com.ywb.focusguard.domain.analyzer.EnvironmentAnalyzer
 import com.ywb.focusguard.domain.model.EnvironmentSnapshot
-import com.ywb.focusguard.domain.model.LightLevel
 import com.ywb.focusguard.domain.model.LightSample
 import com.ywb.focusguard.domain.model.MotionSample
 import com.ywb.focusguard.domain.model.NoiseLevel
@@ -15,6 +15,7 @@ import javax.inject.Singleton
 
 @Singleton
 class EnvironmentRepositoryImpl @Inject constructor(
+    private val lightSensorDataSource: LightSensorDataSource,
     private val environmentAnalyzer: EnvironmentAnalyzer
 ) : EnvironmentRepository {
     // 当前是固定演示数据。真实噪声数据会来自 AudioRecord，并且需要权限、线程和资源释放处理。
@@ -26,14 +27,7 @@ class EnvironmentRepositoryImpl @Inject constructor(
         )
     )
 
-    // 当前是固定演示数据。真实光照数据会来自 SensorManager.TYPE_LIGHT。
-    override fun observeLight(): Flow<LightSample> = flowOf(
-        LightSample(
-            timestamp = System.currentTimeMillis(),
-            lux = 186f,
-            level = LightLevel.COMFORTABLE
-        )
-    )
+    override fun observeLight(): Flow<LightSample> = lightSensorDataSource.observeLight()
 
     // 当前是固定演示数据。真实移动数据会来自加速度计，并经过防抖/阈值判断。
     override fun observeMotion(): Flow<MotionSample> = flowOf(
