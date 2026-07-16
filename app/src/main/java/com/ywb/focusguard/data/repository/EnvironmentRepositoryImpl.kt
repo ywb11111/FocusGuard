@@ -1,6 +1,7 @@
 package com.ywb.focusguard.data.repository
 
 import com.ywb.focusguard.data.sensor.LightSensorDataSource
+import com.ywb.focusguard.data.sensor.MotionSensorDataSource
 import com.ywb.focusguard.domain.analyzer.EnvironmentAnalyzer
 import com.ywb.focusguard.domain.model.EnvironmentSnapshot
 import com.ywb.focusguard.domain.model.LightSample
@@ -16,6 +17,7 @@ import javax.inject.Singleton
 @Singleton
 class EnvironmentRepositoryImpl @Inject constructor(
     private val lightSensorDataSource: LightSensorDataSource,
+    private val motionSensorDataSource: MotionSensorDataSource,
     private val environmentAnalyzer: EnvironmentAnalyzer
 ) : EnvironmentRepository {
     // 当前是固定演示数据。真实噪声数据会来自 AudioRecord，并且需要权限、线程和资源释放处理。
@@ -29,14 +31,7 @@ class EnvironmentRepositoryImpl @Inject constructor(
 
     override fun observeLight(): Flow<LightSample> = lightSensorDataSource.observeLight()
 
-    // 当前是固定演示数据。真实移动数据会来自加速度计，并经过防抖/阈值判断。
-    override fun observeMotion(): Flow<MotionSample> = flowOf(
-        MotionSample(
-            timestamp = System.currentTimeMillis(),
-            magnitude = 9.8f,
-            isSignificantMove = false
-        )
-    )
+    override fun observeMotion(): Flow<MotionSample> = motionSensorDataSource.observeMotion()
 
     // combine 把三条独立数据流合成一个环境快照，ViewModel 收一个 Flow 就能拿到完整环境状态。
     override fun observeEnvironmentSnapshot(): Flow<EnvironmentSnapshot> =
