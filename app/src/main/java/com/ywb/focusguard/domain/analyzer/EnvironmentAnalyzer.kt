@@ -6,17 +6,23 @@ import com.ywb.focusguard.domain.model.LightLevel
 import com.ywb.focusguard.domain.model.MotionSample
 import com.ywb.focusguard.domain.model.NoiseLevel
 
-// 环境判断规则放在独立 Analyzer 中，避免 ViewModel 同时承担状态管理和业务计算。
+/**
+ * 环境判断规则放在独立 Analyzer 中，避免 ViewModel 同时承担状态管理和业务计算。
+ *
+ * 职责：根据噪声、光照、移动数据判断整体环境状态，供首页和专注页使用。
+ */
 class EnvironmentAnalyzer {
     /**
-     * 按“移动 > 噪声 > 光照”的优先级输出一个整体状态，确保首页只展示最需要处理的问题。
+     * 按"移动 > 噪声 > 光照"的优先级输出一个整体状态，确保首页只展示最需要处理的问题。
+     *
+     * 注意：使用 motion.isMoving（持续状态）而不是 isSignificantMove（瞬时事件）。
      */
     fun statusFor(
         noiseLevel: NoiseLevel,
         lightLevel: LightLevel,
         motion: MotionSample
     ): EnvironmentStatus = when {
-        motion.isSignificantMove -> EnvironmentStatus.MOVING
+        motion.isMoving -> EnvironmentStatus.MOVING
         noiseLevel == NoiseLevel.NOISY || noiseLevel == NoiseLevel.LOUD -> EnvironmentStatus.NOISY
         lightLevel == LightLevel.DARK || lightLevel == LightLevel.DIM -> EnvironmentStatus.TOO_DARK
         lightLevel == LightLevel.BRIGHT -> EnvironmentStatus.TOO_BRIGHT

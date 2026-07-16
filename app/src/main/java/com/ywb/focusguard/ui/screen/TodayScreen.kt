@@ -116,7 +116,7 @@ fun TodayScreen(
             )
             MetricCard(
                 label = "移动",
-                value = if (environment?.motion?.isSignificantMove == true) "活动" else "稳定",
+                value = if (environment?.motion?.isMoving == true) "活动" else "稳定",
                 modifier = Modifier.weight(1f)
             )
         }

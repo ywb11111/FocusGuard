@@ -1,5 +1,6 @@
 package com.ywb.focusguard.ui.navigation
 
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
@@ -34,7 +35,19 @@ fun FocusGuardNavHost(
         startDestination = Destination.Today.route,
         modifier = modifier
     ) {
-        composable(Destination.Today.route) {
+        composable(
+            route = Destination.Today.route,
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left
+                )
+            },
+            exitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left
+                )
+            }
+        ) {
             TodayRoute(
                 onStartFocus = onStartFocus,
                 onOpenSettings = { navController.navigate(Destination.Settings.route) },
@@ -43,19 +56,52 @@ fun FocusGuardNavHost(
                 }
             )
         }
-        composable(Destination.Session.route) {
+        composable(
+            route = Destination.Session.route,
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left
+                )
+            },
+            exitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left
+                )
+            }) {
             SessionRoute(
                 onFinish = { id -> navController.navigate(Destination.SessionDetail.createRoute(id)) }
             )
         }
-        composable(Destination.Reports.route) {
+        composable(
+            route = Destination.Reports.route,
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left
+                )
+            },
+            exitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left
+                )
+            }) {
             ReportsRoute(
                 onOpenSessionDetail = { id ->
                     navController.navigate(Destination.SessionDetail.createRoute(id))
                 }
             )
         }
-        composable(Destination.Settings.route) {
+        composable(
+            route = Destination.Settings.route,
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left
+                )
+            },
+            exitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left
+                )
+            }) {
             SettingsRoute(
                 onOpenPermissionGuide = { navController.navigate(Destination.PermissionGuide.route) }
             )

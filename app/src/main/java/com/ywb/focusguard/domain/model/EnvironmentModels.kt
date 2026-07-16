@@ -47,12 +47,14 @@ enum class LightLevel {
  *
  * @property timestamp 样本的 Unix 时间戳，单位毫秒，适合持久化和展示。
  * @property magnitude 三轴加速度的合成模长，静止时通常接近 9.8。
- * @property isSignificantMove 是否在当前样本上刚确认了一次有效移动事件。
+ * @property isSignificantMove 是否在当前样本上刚确认了一次有效移动事件（瞬时）。
+ * @property isMoving 当前是否处于移动状态（持续），冷却期内为 true，用于 UI 展示。
  */
 data class MotionSample(
     val timestamp: Long,
     val magnitude: Float,
-    val isSignificantMove: Boolean
+    val isSignificantMove: Boolean,
+    val isMoving: Boolean = isSignificantMove  // 默认值兼容旧代码，但实际由 Detector 决定
 )
 
 /**
