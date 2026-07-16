@@ -15,6 +15,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+/**
+ * 统一展示“指标名称 + 主要数值 + 可选说明”的紧凑卡片。
+ *
+ * @param label 指标名称。
+ * @param value 最醒目的指标值。
+ * @param modifier 外部布局修饰符。
+ * @param supportingText 可选的补充说明。
+ */
 @Composable
 fun MetricCard(
     label: String,
@@ -54,6 +62,7 @@ fun MetricCard(
     }
 }
 
+/** 将多个名称/数值对平均排列为一行指标卡。 */
 @Composable
 fun MetricRow(
     metrics: List<Pair<String, String>>,

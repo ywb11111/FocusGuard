@@ -26,6 +26,7 @@ import com.ywb.focusguard.ui.component.SectionHeader
 import com.ywb.focusguard.ui.state.SettingsUiState
 import com.ywb.focusguard.ui.viewmodel.SettingsViewModel
 
+/** 设置页路由层：收集设置状态并转发权限说明导航事件。 */
 @Composable
 fun SettingsRoute(
     onOpenPermissionGuide: () -> Unit,
@@ -38,6 +39,9 @@ fun SettingsRoute(
     )
 }
 
+/**
+ * 设置页纯 UI。当前设置值来自内存 Repository，开关仍为只读展示，阶段性接入 DataStore 后可编辑。
+ */
 @Composable
 fun SettingsScreen(
     uiState: SettingsUiState,
@@ -88,13 +92,14 @@ fun SettingsScreen(
 
         SectionHeader(title = "关于")
         Text(
-            text = "当前是基础骨架版本。后续会逐步接入 SensorManager、AudioRecord、Room 持久化、前台服务和性能报告。",
+            text = "当前已接入 Room、光照与移动传感器；噪声检测、前台服务和性能报告将在后续阶段完成。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
 
+/** 展示一个名称和当前设置值。 */
 @Composable
 private fun SettingRow(
     label: String,
@@ -114,6 +119,7 @@ private fun SettingRow(
     }
 }
 
+/** 展示一个布尔设置；当前不接收点击事件，因此只反映状态。 */
 @Composable
 private fun ToggleRow(
     label: String,
@@ -129,6 +135,7 @@ private fun ToggleRow(
     }
 }
 
+/** 展示单项权限名称和授权状态。 */
 @Composable
 private fun PermissionLine(
     label: String,

@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/** 验证三轴模长公式和单帧候选移动阈值。 */
 class MotionClassifierTest {
     @Test
     fun `加速度模长按三轴平方和开方计算`() {

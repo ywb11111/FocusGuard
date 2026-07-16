@@ -21,16 +21,25 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
 
+/**
+ * 专注页状态机：负责计时、暂停/继续、会话持久化调用和页面状态转换。
+ * 数据库写入交给 FocusRepository，硬件监听交给 EnvironmentRepository。
+ */
 @HiltViewModel
 class SessionViewModel @Inject constructor(
+    /** 提供当前环境快照；光照和移动为真实传感器，噪声暂为演示数据。 */
     environmentRepository: EnvironmentRepository,
+    /** 创建和结束 Room 会话。 */
     private val focusRepository: FocusRepository
 ) : ViewModel() {
+    /** 当前固定使用的默认专注配置，后续从 SettingsRepository 读取。 */
     private val defaultConfig = FocusConfig(durationMinutes = 25)
+
+    /** 目标专注总时长，单位毫秒。 */
     private val sessionDurationMillis = defaultConfig.durationMinutes * 60 * 1000L
 
     // 环境数据单独保存成 StateFlow，计时状态需要它时读取最新快照即可。
-    // 这里先是演示数据，后续会替换成 SensorManager / AudioRecord 的真实数据源。
+    // 光照和移动已来自 SensorManager，噪声会在阶段 4 替换为 AudioRecord。
     private val environment: StateFlow<EnvironmentSnapshot?> = environmentRepository
         .observeEnvironmentSnapshot()
         .stateIn(
@@ -39,6 +48,7 @@ class SessionViewModel @Inject constructor(
             initialValue = null
         )
 
+    /** ViewModel 内部可修改的专注状态源。 */
     private val _uiState = MutableStateFlow<SessionUiState>(
         SessionUiState.Ready(defaultConfig, null)
     )
@@ -47,6 +57,8 @@ class SessionViewModel @Inject constructor(
 
     // tickerJob 表示当前计时协程。暂停、结束、重置时必须 cancel，避免多个计时器同时跑。
     private var tickerJob: Job? = null
+
+    /** 当前 Room 会话 id；0 表示尚未成功创建会话。 */
     private var activeSessionId = 0L
     // runStartedAt 表示“本轮运行”开始时间；暂停再继续时会重新赋值。
     private var runStartedAt = 0L
@@ -54,6 +66,7 @@ class SessionViewModel @Inject constructor(
     private var accumulatedMillis = 0L
 
     init {
+        // 准备阶段持续更新环境预检；开始专注后由计时状态自行控制展示内容。
         viewModelScope.launch {
             environment.collect { snapshot ->
                 _uiState.update { current ->
@@ -68,6 +81,7 @@ class SessionViewModel @Inject constructor(
         }
     }
 
+    /** 在 Room 创建进行中记录，拿到真实 id 后进入 Running 并启动计时器。 */
     fun startSession() {
         val now = System.currentTimeMillis()
         viewModelScope.launch {
@@ -80,6 +94,7 @@ class SessionViewModel @Inject constructor(
         }
     }
 
+    /** 仅在 Running 状态生效：停止 ticker，并冻结当前累计时长。 */
     fun pauseSession() {
         val current = _uiState.value as? SessionUiState.Running ?: return
         tickerJob?.cancel()
@@ -94,6 +109,7 @@ class SessionViewModel @Inject constructor(
         )
     }
 
+    /** 仅在 Paused 状态生效：保留累计时长并开始新的运行片段。 */
     fun resumeSession() {
         val current = _uiState.value as? SessionUiState.Paused ?: return
         // 继续时只重置本轮开始时间，不清空 accumulatedMillis。
@@ -102,12 +118,14 @@ class SessionViewModel @Inject constructor(
         startTicker()
     }
 
+    /** 停止计时并异步更新 Room 会话，完成后进入 Finished。 */
     fun finishSession() {
         val elapsedMillis = currentElapsedMillis()
         tickerJob?.cancel()
         completeSession(elapsedMillis)
     }
 
+    /** 清除当前会话内存状态，回到可再次开始的 Ready。 */
     fun resetSession() {
         tickerJob?.cancel()
         activeSessionId = 0L
@@ -116,6 +134,7 @@ class SessionViewModel @Inject constructor(
         _uiState.value = SessionUiState.Ready(defaultConfig, environment.value)
     }
 
+    /** 启动每秒更新一次的 ticker；调用前会取消旧 Job，保证只有一个计时循环。 */
     private fun startTicker() {
         tickerJob?.cancel()
         tickerJob = viewModelScope.launch {
@@ -132,6 +151,7 @@ class SessionViewModel @Inject constructor(
         }
     }
 
+    /** 根据累计时长和最新环境快照生成 Running 状态。 */
     private fun emitRunningState(elapsedMillis: Long) {
         val snapshot = environment.value
         // ViewModel 负责把业务数据整理成 UI 能直接显示的状态，Screen 不再自己计算剩余时间。
@@ -145,6 +165,7 @@ class SessionViewModel @Inject constructor(
         )
     }
 
+    /** 调用 Repository 持久化结束结果；没有有效 sessionId 时忽略请求。 */
     private fun completeSession(elapsedMillis: Long) {
         val sessionId = activeSessionId
         if (sessionId == 0L) return
@@ -155,6 +176,7 @@ class SessionViewModel @Inject constructor(
         }
     }
 
+    /** 计算“暂停前累计时长 + 当前运行片段时长”，单位毫秒。 */
     private fun currentElapsedMillis(): Long {
         // 计时公式：暂停前累计时长 + 当前运行片段时长。
         // 这样暂停/继续不会重复计算，也不会丢失已经专注的时间。

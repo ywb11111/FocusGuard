@@ -29,6 +29,7 @@ import com.ywb.focusguard.ui.component.SimpleLineChart
 import com.ywb.focusguard.ui.state.ReportsUiState
 import com.ywb.focusguard.ui.viewmodel.ReportsViewModel
 
+/** 报告页路由层：收集 Room 驱动的报告状态并处理详情导航。 */
 @Composable
 fun ReportsRoute(
     onOpenSessionDetail: (Long) -> Unit,
@@ -41,6 +42,10 @@ fun ReportsRoute(
     )
 }
 
+/**
+ * 报告页纯 UI，展示汇总、趋势和历史列表。
+ * 当前周/月切换与空列表 demo 仍是界面占位，后续接入真实日期聚合。
+ */
 @Composable
 fun ReportsScreen(
     uiState: ReportsUiState,
@@ -89,6 +94,7 @@ fun ReportsScreen(
         }
         item {
             SectionHeader(title = "趋势")
+            // 空数据库时暂用 demo 维持页面结构，不能把这条曲线当成真实历史数据。
             SimpleLineChart(
                 values = uiState.sessions.ifEmpty { demoSessions() }.map { it.score.toFloat() },
                 modifier = Modifier.padding(top = 10.dp)
@@ -106,6 +112,7 @@ fun ReportsScreen(
     }
 }
 
+/** 一条可点击的历史专注记录。 */
 @Composable
 private fun SessionListItem(
     session: FocusSession,
@@ -134,6 +141,7 @@ private fun SessionListItem(
     }
 }
 
+/** 报告页空数据库时的展示占位数据，真实记录存在后不会使用。 */
 private fun demoSessions(): List<FocusSession> = listOf(
     FocusSession(1, 0, 0, 45 * 60 * 1000L, 42f, 58f, 180f, 2, 1, 88, "晚间学习"),
     FocusSession(2, 0, 0, 30 * 60 * 1000L, 48f, 64f, 140f, 4, 2, 76, "午后复习")

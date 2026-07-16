@@ -27,6 +27,7 @@ import com.ywb.focusguard.ui.component.SimpleLineChart
 import com.ywb.focusguard.ui.state.SessionUiState
 import com.ywb.focusguard.ui.viewmodel.SessionViewModel
 
+/** 专注页路由层：收集 ViewModel 状态，并把用户事件映射为状态机方法。 */
 @Composable
 fun SessionRoute(
     onFinish: (Long) -> Unit,
@@ -45,6 +46,10 @@ fun SessionRoute(
     )
 }
 
+/**
+ * 专注页纯 UI，根据 sealed UiState 只展示当前合法阶段。
+ * 所有计时、数据库和传感器逻辑都留在 ViewModel/Repository/DataSource。
+ */
 @Composable
 fun SessionScreen(
     uiState: SessionUiState,
@@ -78,6 +83,7 @@ fun SessionScreen(
     }
 }
 
+/** 准备状态内容：展示模式、环境预检和开始入口。 */
 @Composable
 private fun ReadySessionContent(
     uiState: SessionUiState.Ready,
@@ -126,6 +132,7 @@ private fun ReadySessionContent(
     }
 }
 
+/** 运行状态内容：展示倒计时、环境摘要和暂停/结束操作。 */
 @Composable
 private fun RunningSessionContent(
     uiState: SessionUiState.Running,
@@ -169,6 +176,7 @@ private fun RunningSessionContent(
     }
 }
 
+/** 暂停状态内容：冻结时间并提供继续或结束操作。 */
 @Composable
 private fun PausedSessionContent(
     uiState: SessionUiState.Paused,
@@ -202,6 +210,7 @@ private fun PausedSessionContent(
     }
 }
 
+/** 完成状态内容：展示最终评分，并提供详情和重置入口。 */
 @Composable
 private fun FinishedSessionContent(
     uiState: SessionUiState.Finished,

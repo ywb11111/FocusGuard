@@ -1,17 +1,12 @@
 package com.ywb.focusguard
 
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
-import org.junit.Assert.*
-
-/**
- * Example local unit test, which will execute on the development machine (host).
- *
- * See [testing documentation](http://d.android.com/tools/testing).
- */
+/** Android Studio 项目模板自带的最小 JVM 单元测试，用于确认本地测试环境可运行。 */
 class ExampleUnitTest {
     @Test
-    fun addition_isCorrect() {
+    fun `基础加法结果正确`() {
         assertEquals(4, 2 + 2)
     }
 }

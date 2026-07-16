@@ -10,6 +10,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 
+/**
+ * 页面分区标题，右侧可插入按钮、菜单等操作区域。
+ *
+ * @param title 分区名称。
+ * @param modifier 外部布局修饰符。
+ * @param action 可选的右侧操作内容。
+ */
 @Composable
 fun SectionHeader(
     title: String,

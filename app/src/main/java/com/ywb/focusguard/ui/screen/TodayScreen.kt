@@ -31,6 +31,9 @@ import com.ywb.focusguard.ui.component.SectionHeader
 import com.ywb.focusguard.ui.state.TodayUiState
 import com.ywb.focusguard.ui.viewmodel.TodayViewModel
 
+/**
+ * 今日页路由层：从 Hilt 获取 ViewModel、按生命周期收集状态，并把导航事件传给纯 UI。
+ */
 @Composable
 fun TodayRoute(
     onStartFocus: () -> Unit,
@@ -47,6 +50,14 @@ fun TodayRoute(
     )
 }
 
+/**
+ * 今日页纯 UI，只依赖 [TodayUiState] 和事件回调，因此可独立预览和测试。
+ *
+ * @param uiState 当前可渲染状态。
+ * @param onStartFocus 进入专注页。
+ * @param onOpenSettings 打开设置页。
+ * @param onOpenSessionDetail 按真实会话 id 打开详情页。
+ */
 @Composable
 fun TodayScreen(
     uiState: TodayUiState,
@@ -85,7 +96,7 @@ fun TodayScreen(
         val environment = uiState.environment
         StatusCard(
             title = environment?.let { EnvironmentAnalyzer().headline(it) } ?: "正在读取环境",
-            subtitle = "噪声、光照和移动状态会在后续阶段接入真实传感器。"
+            subtitle = "光照和移动来自手机传感器，噪声检测将在下一阶段接入。"
         )
 
         SectionHeader(title = "实时指标")
@@ -168,6 +179,7 @@ fun TodayScreen(
     }
 }
 
+/** 首页顶部的整体环境结论卡片。 */
 @Composable
 private fun StatusCard(
     title: String,
@@ -194,6 +206,7 @@ private fun StatusCard(
     }
 }
 
+/** 把毫秒时长格式化为页面使用的小时/分钟文本。 */
 fun formatDuration(durationMillis: Long): String {
     val totalMinutes = durationMillis / 60_000L
     val hours = totalMinutes / 60

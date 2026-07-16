@@ -5,6 +5,7 @@ import com.ywb.focusguard.domain.model.FocusSession
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+/** 保护 Room Entity 与领域模型双向转换时不遗漏字段。 */
 class FocusSessionMapperTest {
     @Test
     fun `FocusSessionEntity 转换为领域模型时保留所有字段`() {

@@ -2,14 +2,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- 阶段 4 使用：只分析音量，不保存原始音频。 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Android 13+ 展示前台服务通知时需要动态申请。 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 阶段 5 使用：允许专注监测服务以前台服务运行。 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- 特殊访问权限，不能通过普通运行时权限弹窗授予，需要引导用户前往系统设置。 -->
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- Hilt 要求 Application 使用 @HiltAndroidApp 的实现类。 -->
     <application
         android:name=".FocusGuardApplication"
         android:allowBackup="true"
@@ -20,6 +25,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.FocusGuard">
+        <!-- App 唯一入口 Activity，负责承载 Compose UI。 -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -33,6 +39,7 @@
             </intent-filter>
         </activity>
 
+        <!-- 阶段 5 的后台监测入口，不允许其他 App 直接启动。 -->
         <service
             android:name=".service.FocusMonitorService"
             android:exported="false"

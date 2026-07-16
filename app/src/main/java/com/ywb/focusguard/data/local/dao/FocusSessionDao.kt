@@ -7,6 +7,7 @@ import androidx.room.Query
 import com.ywb.focusguard.data.local.entity.FocusSessionEntity
 import kotlinx.coroutines.flow.Flow
 
+/** 专注会话表的查询与写入入口，Repository 通过它管理会话生命周期。 */
 @Dao
 interface FocusSessionDao {
     // 返回 Flow 的好处：数据库内容变化后，Room 会自动重新发射列表，UI 可以跟着刷新。
@@ -20,6 +21,7 @@ interface FocusSessionDao {
     @Query("SELECT * FROM focus_sessions ORDER BY startTime DESC LIMIT 1")
     fun observeLatestSession(): Flow<FocusSessionEntity?>
 
+    // 结束会话前需要一次性读取开始时间；这里不需要持续观察，所以使用 suspend 查询。
     @Query("SELECT * FROM focus_sessions WHERE id = :sessionId LIMIT 1")
     suspend fun getSession(sessionId: Long): FocusSessionEntity?
 

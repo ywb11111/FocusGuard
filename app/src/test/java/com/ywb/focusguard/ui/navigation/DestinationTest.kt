@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
+/** 防止专注页与详情页 route 再次冲突，并保护带 id 路由的生成格式。 */
 class DestinationTest {
     @Test
     fun `专注页和专注详情页使用不同 route`() {

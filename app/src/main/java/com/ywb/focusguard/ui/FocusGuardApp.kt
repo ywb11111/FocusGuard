@@ -15,12 +15,18 @@ import com.ywb.focusguard.ui.navigation.Destination
 import com.ywb.focusguard.ui.navigation.FocusGuardNavHost
 import com.ywb.focusguard.ui.navigation.topLevelDestinations
 
+/**
+ * App 的 Compose 根组件，统一持有 NavController、Scaffold 和底部导航栏。
+ * 具体页面内容交给 [FocusGuardNavHost]，避免每个 Screen 自己管理顶层导航。
+ */
 @Composable
 fun FocusGuardApp() {
     // NavController 是 Compose Navigation 的核心对象，负责页面跳转和返回栈管理。
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
+    // 当前 route 决定底部导航栏哪一项处于选中状态。
     val currentRoute = backStackEntry?.destination?.route
+    // 所有顶层入口复用同一导航策略，保证底部 Tab 与页面内入口行为一致。
     val navigateToTopLevel: (Destination) -> Unit = { destination ->
         navController.navigate(destination.route) {
             // 切换顶层页面时复用同一套导航规则，避免 Today 的按钮和底部 Tab 行为不一致。

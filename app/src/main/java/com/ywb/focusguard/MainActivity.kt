@@ -8,8 +8,10 @@ import dagger.hilt.android.AndroidEntryPoint
 import com.ywb.focusguard.ui.FocusGuardApp
 import com.ywb.focusguard.ui.theme.FocusGuardTheme
 
+/** App 唯一 Activity，负责提供 Compose 宿主和 Hilt 的 Activity 注入入口。 */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    /** Activity 创建时启用沉浸式边缘布局并挂载 Compose 根组件。 */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

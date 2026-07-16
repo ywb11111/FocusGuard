@@ -8,6 +8,9 @@ import com.ywb.focusguard.domain.model.NoiseLevel
 
 // 环境判断规则放在独立 Analyzer 中，避免 ViewModel 同时承担状态管理和业务计算。
 class EnvironmentAnalyzer {
+    /**
+     * 按“移动 > 噪声 > 光照”的优先级输出一个整体状态，确保首页只展示最需要处理的问题。
+     */
     fun statusFor(
         noiseLevel: NoiseLevel,
         lightLevel: LightLevel,
@@ -20,6 +23,7 @@ class EnvironmentAnalyzer {
         else -> EnvironmentStatus.FOCUSED
     }
 
+    /** 将领域状态转换为首页可直接显示的中文标题。 */
     fun headline(snapshot: EnvironmentSnapshot): String = when (snapshot.status) {
         EnvironmentStatus.FOCUSED -> "当前适合专注"
         EnvironmentStatus.NOISY -> "环境偏吵"

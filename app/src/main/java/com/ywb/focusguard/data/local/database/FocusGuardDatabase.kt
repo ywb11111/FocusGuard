@@ -22,6 +22,9 @@ import com.ywb.focusguard.data.local.entity.NoiseSampleEntity
     exportSchema = false
 )
 abstract class FocusGuardDatabase : RoomDatabase() {
+    /** 提供专注会话表的 DAO，由 Hilt 交给 FocusRepository 使用。 */
     abstract fun focusSessionDao(): FocusSessionDao
+
+    /** 提供噪声、光照和移动采样表的统一 DAO。 */
     abstract fun sampleDao(): SampleDao
 }

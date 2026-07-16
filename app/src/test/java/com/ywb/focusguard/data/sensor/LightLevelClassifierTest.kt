@@ -4,6 +4,7 @@ import com.ywb.focusguard.domain.model.LightLevel
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+/** 覆盖光照等级的每个阈值区间，尤其关注 10、100、500 lux 边界。 */
 class LightLevelClassifierTest {
     @Test
     fun `0 到 10 lux 判定为 DARK`() {

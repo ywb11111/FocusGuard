@@ -23,6 +23,7 @@ import com.ywb.focusguard.ui.component.SimpleLineChart
 import com.ywb.focusguard.ui.state.SessionDetailUiState
 import com.ywb.focusguard.ui.viewmodel.SessionDetailViewModel
 
+/** 详情页路由层：由 Hilt 创建能读取 SavedStateHandle 的 ViewModel，并收集其状态。 */
 @Composable
 fun SessionDetailRoute(
     viewModel: SessionDetailViewModel = hiltViewModel()
@@ -31,6 +32,7 @@ fun SessionDetailRoute(
     SessionDetailScreen(uiState = uiState)
 }
 
+/** 详情页状态分发器，确保 Loading、Empty、Content 三种状态互斥展示。 */
 @Composable
 fun SessionDetailScreen(
     uiState: SessionDetailUiState
@@ -42,6 +44,7 @@ fun SessionDetailScreen(
     }
 }
 
+/** 正常详情内容，展示真实会话主记录以及当前可用的曲线和评分拆解。 */
 @Composable
 private fun SessionDetailContent(
     uiState: SessionDetailUiState.Content
@@ -79,6 +82,7 @@ private fun SessionDetailContent(
     }
 }
 
+/** 加载和空数据状态共用的简洁提示布局。 */
 @Composable
 private fun SessionDetailMessage(message: String) {
     Column(

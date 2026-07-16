@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+/** 首次使用引导页的基础内容，后续由 DataStore 中的首次启动标记决定是否展示。 */
 @Composable
 fun OnboardingScreen() {
     Column(

@@ -4,6 +4,10 @@ import com.ywb.focusguard.domain.model.FocusScore
 
 // 评分逻辑放在 domain 层，保持可解释、可测试，也方便面试时讲清楚每个扣分项来自哪里。
 class FocusScoreAnalyzer {
+    /**
+     * 根据专注期间的聚合指标计算总分、各项扣分和建议。
+     * 所有规则都是显式阈值，方便测试、调参和向面试官解释。
+     */
     fun calculate(
         averageNoiseDb: Float,
         averageLightLux: Float,
@@ -11,6 +15,7 @@ class FocusScoreAnalyzer {
         distractionCount: Int,
         durationMillis: Long
     ): FocusScore {
+        // 噪声、光照按区间扣分；移动和分心按次数扣分并设置上限，避免单项吞掉全部分数。
         val noisePenalty = when {
             averageNoiseDb >= 75f -> 25
             averageNoiseDb >= 65f -> 15

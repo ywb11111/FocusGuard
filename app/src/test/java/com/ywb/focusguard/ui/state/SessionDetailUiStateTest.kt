@@ -6,6 +6,7 @@ import com.ywb.focusguard.domain.model.SessionDetail
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+/** 验证领域层详情转换为 UI 展示状态时的字段和文本格式。 */
 class SessionDetailUiStateTest {
     @Test
     fun `SessionDetail 转换为 Content 状态时展示真实会话信息`() {

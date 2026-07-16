@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+/** 解释敏感权限用途，遵循“先说明原因，再发起授权”的权限交互原则。 */
 @Composable
 fun PermissionGuideScreen() {
     Column(

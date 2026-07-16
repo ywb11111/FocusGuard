@@ -20,9 +20,15 @@ import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * 专注数据的 Room 实现，负责会话生命周期、统计派生和领域模型转换。
+ * 当前会话主记录已是真实数据库数据，详情采样曲线仍是 demo，等待采样表接入。
+ */
 @Singleton
 class FocusRepositoryImpl @Inject constructor(
+    /** 负责 focus_sessions 表的查询与写入。 */
     private val focusSessionDao: FocusSessionDao,
+    /** 结束会话时根据聚合指标生成可解释评分。 */
     private val scoreAnalyzer: FocusScoreAnalyzer
 ) : FocusRepository {
     // 今日统计先在 Repository 中由 Room Flow 派生，后续数据量变大后可以下沉为 Room 聚合 SQL。
@@ -39,6 +45,7 @@ class FocusRepositoryImpl @Inject constructor(
 
     override fun observeSessions(): Flow<List<FocusSession>> =
         focusSessionDao.observeSessions().map { entities ->
+            // 进行中的占位记录不应出现在 Today 和 Reports 的历史列表中。
             entities
                 .filter { it.endTime != null }
                 .map { it.toDomain() }
@@ -88,6 +95,7 @@ class FocusRepositoryImpl @Inject constructor(
     }
 
     override suspend fun finishSession(sessionId: Long, durationMillis: Long): FocusSession {
+        // Repository 只保存 ViewModel 提供的净专注时长，暂停时间不会被重复计算。
         val finishedAt = System.currentTimeMillis()
         val existing = focusSessionDao.getSession(sessionId)
         val startedAt = existing?.startTime ?: finishedAt
@@ -152,6 +160,7 @@ class FocusRepositoryImpl @Inject constructor(
         MotionSample(start + 31 * 60_000L, 10.6f, true)
     )
 
+    /** 计算设备本地时区当天 00:00 的 Unix 毫秒时间戳，用于过滤今日会话。 */
     private fun todayStartMillis(): Long {
         val calendar = Calendar.getInstance()
         calendar.set(Calendar.HOUR_OF_DAY, 0)
