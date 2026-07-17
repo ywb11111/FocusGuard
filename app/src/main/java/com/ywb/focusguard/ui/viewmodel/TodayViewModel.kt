@@ -17,21 +17,25 @@ class TodayViewModel @Inject constructor(
     /** 提供实时噪声、光照和移动快照。 */
     environmentRepository: EnvironmentRepository,
     /** 提供 Room 中的专注统计和历史记录。 */
-    focusRepository: FocusRepository
+    focusRepository: FocusRepository,
+    /** 提供权限状态检查和更新。 */
+    private val permissionManager: PermissionManager
 ) : ViewModel() {
-    // combine 用来把多个数据源合成一个页面状态：环境快照 + 今日统计 + 最近记录。
+    // combine 用来把多个数据源合成一个页面状态：环境快照 + 今日统计 + 最近记录 + 权限状态。
     // 这样 Screen 只需要收集一个 uiState，而不是同时订阅好几个 Flow。
     /** 生命周期感知的今日页状态；只有页面订阅时才保持上游传感器流活跃。 */
     val uiState = combine(
         environmentRepository.observeEnvironmentSnapshot(),
         focusRepository.observeTodaySummary(),
-        focusRepository.observeSessions()
-    ) { environment, summary, sessions ->
+        focusRepository.observeSessions(),
+        permissionManager.permissionState
+    ) { environment, summary, sessions, permissions ->
         TodayUiState(
             isLoading = false,
             environment = environment,
             todaySummary = summary,
-            latestSession = sessions.firstOrNull()
+            latestSession = sessions.firstOrNull(),
+            permissionState = permissions
         )
     }.stateIn(
         scope = viewModelScope,
@@ -39,4 +43,9 @@ class TodayViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = TodayUiState()
     )
+
+    /** 在页面恢复时刷新权限状态，确保显示最新授权结果。 */
+    fun refreshPermissions() {
+        permissionManager.refreshPermissionState()
+    }
 }

@@ -1,5 +1,8 @@
 package com.ywb.focusguard.ui.screen
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,19 +37,38 @@ fun SettingsRoute(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // 录音权限请求启动器
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        viewModel.refreshPermissions()
+    }
+
+    // 页面进入时刷新权限状态
+    LaunchedEffect(Unit) {
+        viewModel.refreshPermissions()
+    }
+
     SettingsScreen(
         uiState = uiState,
-        onOpenPermissionGuide = onOpenPermissionGuide
+        onOpenPermissionGuide = onOpenPermissionGuide,
+        onRequestAudioPermission = {
+            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
     )
 }
 
 /**
  * 设置页纯 UI。当前设置值来自内存 Repository，开关仍为只读展示，阶段性接入 DataStore 后可编辑。
+ *
+ * @param onRequestAudioPermission 请求录音权限的回调。
  */
 @Composable
 fun SettingsScreen(
     uiState: SettingsUiState,
-    onOpenPermissionGuide: () -> Unit
+    onOpenPermissionGuide: () -> Unit,
+    onRequestAudioPermission: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -81,7 +104,11 @@ fun SettingsScreen(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                PermissionLine("录音权限", uiState.permissionState.audioGranted)
+                PermissionLine(
+                    label = "录音权限",
+                    granted = uiState.permissionState.audioGranted,
+                    onRequest = if (!uiState.permissionState.audioGranted) onRequestAudioPermission else null
+                )
                 PermissionLine("通知权限", uiState.permissionState.notificationGranted)
                 PermissionLine("使用情况访问", uiState.permissionState.usageStatsGranted)
                 Button(onClick = onOpenPermissionGuide, modifier = Modifier.fillMaxWidth()) {
@@ -139,16 +166,24 @@ private fun ToggleRow(
 @Composable
 private fun PermissionLine(
     label: String,
-    granted: Boolean
+    granted: Boolean,
+    onRequest: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label)
-        Text(
-            text = if (granted) "已开启" else "未开启",
-            color = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-        )
+        if (onRequest != null && !granted) {
+            Button(onClick = onRequest) {
+                Text("去授权")
+            }
+        } else {
+            Text(
+                text = if (granted) "已开启" else "未开启",
+                color = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+            )
+        }
     }
 }

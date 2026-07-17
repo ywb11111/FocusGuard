@@ -1,10 +1,16 @@
 package com.ywb.focusguard.ui.screen
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,10 +25,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ywb.focusguard.domain.analyzer.EnvironmentAnalyzer
@@ -42,11 +51,29 @@ fun TodayRoute(
     viewModel: TodayViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // 录音权限请求启动器
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        // 用户授权后立即刷新状态
+        viewModel.refreshPermissions()
+    }
+
+    // 页面进入时检查权限状态
+    LaunchedEffect(Unit) {
+        viewModel.refreshPermissions()
+    }
+
     TodayScreen(
         uiState = uiState,
         onStartFocus = onStartFocus,
         onOpenSettings = onOpenSettings,
-        onOpenSessionDetail = onOpenSessionDetail
+        onOpenSessionDetail = onOpenSessionDetail,
+        onRequestAudioPermission = {
+            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
     )
 }
 
@@ -57,13 +84,15 @@ fun TodayRoute(
  * @param onStartFocus 进入专注页。
  * @param onOpenSettings 打开设置页。
  * @param onOpenSessionDetail 按真实会话 id 打开详情页。
+ * @param onRequestAudioPermission 请求录音权限。
  */
 @Composable
 fun TodayScreen(
     uiState: TodayUiState,
     onStartFocus: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenSessionDetail: (Long) -> Unit
+    onOpenSessionDetail: (Long) -> Unit,
+    onRequestAudioPermission: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -167,6 +196,39 @@ fun TodayScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+
+        // 录音权限缺失提示
+        if (!uiState.permissionState.audioGranted) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "需要录音权限",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "噪声检测需要录音权限来分析环境声音，不会保存原始音频。",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Button(
+                        onClick = onRequestAudioPermission,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("授权录音权限")
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
         }
 
         Button(
