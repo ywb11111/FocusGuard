@@ -3,6 +3,7 @@ package com.ywb.focusguard.di
 import android.content.Context
 import androidx.room.Room
 import com.ywb.focusguard.data.local.dao.FocusSessionDao
+import com.ywb.focusguard.data.local.dao.SampleDao
 import com.ywb.focusguard.data.local.database.FocusGuardDatabase
 import com.ywb.focusguard.data.repository.EnvironmentRepository
 import com.ywb.focusguard.data.repository.EnvironmentRepositoryImpl
@@ -59,6 +60,12 @@ object AppModule {
     /** 从单例数据库获取会话 DAO，确保 Repository 使用同一个数据库连接。 */
     fun provideFocusSessionDao(database: FocusGuardDatabase): FocusSessionDao =
         database.focusSessionDao()
+
+    @Provides
+    @Singleton
+    /** 从单例数据库获取采样 DAO，用于保存和查询光照/噪声/移动样本。 */
+    fun provideSampleDao(database: FocusGuardDatabase): SampleDao =
+        database.sampleDao()
 
     @Provides
     @Singleton

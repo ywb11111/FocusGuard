@@ -27,6 +27,7 @@ sealed interface SessionDetailUiState {
      * @property scoreBreakdownText 各项扣分说明。
      * @property noiseValues 噪声曲线数值。
      * @property lightValues 光照曲线数值。
+     * @property motionCount 移动次数。
      * @property suggestionText 首条改进建议或默认文案。
      */
     data class Content(
@@ -37,6 +38,7 @@ sealed interface SessionDetailUiState {
         val scoreBreakdownText: String,
         val noiseValues: List<Float>,
         val lightValues: List<Float>,
+        val motionCount: Int,
         val suggestionText: String
     ) : SessionDetailUiState
 }
@@ -50,5 +52,6 @@ fun SessionDetail.toUiState(): SessionDetailUiState.Content = SessionDetailUiSta
     scoreBreakdownText = "噪声 -${score.noisePenalty} · 光照 -${score.lightPenalty} · 移动 -${score.motionPenalty} · 分心 -${score.distractionPenalty}",
     noiseValues = noiseSamples.map { it.decibel },
     lightValues = lightSamples.map { it.lux },
+    motionCount = motionEvents.size,
     suggestionText = score.suggestions.firstOrNull() ?: "本次专注记录已保存，后续接入采样后会给出更具体的建议。"
 )

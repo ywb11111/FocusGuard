@@ -7,6 +7,8 @@ import com.ywb.focusguard.data.repository.FocusRepository
 import com.ywb.focusguard.domain.model.EnvironmentSnapshot
 import com.ywb.focusguard.domain.model.FocusConfig
 import com.ywb.focusguard.domain.model.LightLevel
+import com.ywb.focusguard.domain.model.LightSample
+import com.ywb.focusguard.domain.model.MotionSample
 import com.ywb.focusguard.ui.state.SessionUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -22,24 +24,29 @@ import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * 专注页状态机：负责计时、暂停/继续、会话持久化调用和页面状态转换。
+ * 专注页状态机：负责计时、暂停/继续、采样保存和页面状态转换。
+ *
  * 数据库写入交给 FocusRepository，硬件监听交给 EnvironmentRepository。
+ * Running 期间每 10 秒保存一次光照采样，收到移动事件时保存移动记录。
  */
 @HiltViewModel
 class SessionViewModel @Inject constructor(
     /** 提供当前环境快照；光照和移动为真实传感器，噪声暂为演示数据。 */
     environmentRepository: EnvironmentRepository,
-    /** 创建和结束 Room 会话。 */
+    /** 创建和结束 Room 会话，保存采样数据。 */
     private val focusRepository: FocusRepository
 ) : ViewModel() {
+
     /** 当前固定使用的默认专注配置，后续从 SettingsRepository 读取。 */
     private val defaultConfig = FocusConfig(durationMinutes = 25)
 
     /** 目标专注总时长，单位毫秒。 */
     private val sessionDurationMillis = defaultConfig.durationMinutes * 60 * 1000L
 
-    // 环境数据单独保存成 StateFlow，计时状态需要它时读取最新快照即可。
-    // 光照和移动已来自 SensorManager，噪声会在阶段 4 替换为 AudioRecord。
+    /** 采样间隔：每 10 秒保存一次光照数据。 */
+    private val sampleIntervalMillis = 10_000L
+
+    /** 环境数据流，用于采样和状态显示。 */
     private val environment: StateFlow<EnvironmentSnapshot?> = environmentRepository
         .observeEnvironmentSnapshot()
         .stateIn(
@@ -52,25 +59,31 @@ class SessionViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<SessionUiState>(
         SessionUiState.Ready(defaultConfig, null)
     )
-    // 对外只暴露只读 StateFlow，避免 UI 层直接修改状态。
     val uiState: StateFlow<SessionUiState> = _uiState.asStateFlow()
 
-    // tickerJob 表示当前计时协程。暂停、结束、重置时必须 cancel，避免多个计时器同时跑。
+    /** 计时协程 Job。 */
     private var tickerJob: Job? = null
+
+    /** 采样协程 Job（定时保存光照）。 */
+    private var samplingJob: Job? = null
+
+    /** 移动事件监听 Job。 */
+    private var motionWatchJob: Job? = null
 
     /** 当前 Room 会话 id；0 表示尚未成功创建会话。 */
     private var activeSessionId = 0L
-    // runStartedAt 表示“本轮运行”开始时间；暂停再继续时会重新赋值。
+
+    /** 本轮运行开始时间。 */
     private var runStartedAt = 0L
-    // accumulatedMillis 保存暂停前已经累计的时长。继续后用它加上本轮运行时间。
+
+    /** 暂停前已累计的时长。 */
     private var accumulatedMillis = 0L
 
     init {
-        // 准备阶段持续更新环境预检；开始专注后由计时状态自行控制展示内容。
+        // 准备阶段持续更新环境预检
         viewModelScope.launch {
             environment.collect { snapshot ->
                 _uiState.update { current ->
-                    // 只有准备状态需要被环境预检数据刷新；Running/Paused/Finished 不应被环境流冲掉。
                     if (current is SessionUiState.Ready) {
                         current.copy(environment = snapshot)
                     } else {
@@ -81,24 +94,26 @@ class SessionViewModel @Inject constructor(
         }
     }
 
-    /** 在 Room 创建进行中记录，拿到真实 id 后进入 Running 并启动计时器。 */
+    /** 在 Room 创建进行中记录，启动计时和采样。 */
     fun startSession() {
         val now = System.currentTimeMillis()
         viewModelScope.launch {
             activeSessionId = focusRepository.startSession(defaultConfig)
             runStartedAt = now
             accumulatedMillis = 0L
-            // 先立即发出 Running 状态，让用户点开始后 UI 立刻切换，而不是等 1 秒。
             emitRunningState(elapsedMillis = 0L)
             startTicker()
+            startSampling()
+            startMotionWatch()
         }
     }
 
-    /** 仅在 Running 状态生效：停止 ticker，并冻结当前累计时长。 */
+    /** 暂停：停止计时和采样。 */
     fun pauseSession() {
         val current = _uiState.value as? SessionUiState.Running ?: return
         tickerJob?.cancel()
-        // 暂停时把当前已用时长固化下来，继续时不再从 0 开始。
+        samplingJob?.cancel()
+        motionWatchJob?.cancel()
         accumulatedMillis = current.elapsedMillis
         _uiState.value = SessionUiState.Paused(
             sessionId = current.sessionId,
@@ -109,32 +124,37 @@ class SessionViewModel @Inject constructor(
         )
     }
 
-    /** 仅在 Paused 状态生效：保留累计时长并开始新的运行片段。 */
+    /** 继续：恢复计时和采样。 */
     fun resumeSession() {
         val current = _uiState.value as? SessionUiState.Paused ?: return
-        // 继续时只重置本轮开始时间，不清空 accumulatedMillis。
         runStartedAt = System.currentTimeMillis()
         emitRunningState(elapsedMillis = current.elapsedMillis)
         startTicker()
+        startSampling()
+        startMotionWatch()
     }
 
-    /** 停止计时并异步更新 Room 会话，完成后进入 Finished。 */
+    /** 结束：停止所有协程，保存统计结果。 */
     fun finishSession() {
         val elapsedMillis = currentElapsedMillis()
         tickerJob?.cancel()
+        samplingJob?.cancel()
+        motionWatchJob?.cancel()
         completeSession(elapsedMillis)
     }
 
-    /** 清除当前会话内存状态，回到可再次开始的 Ready。 */
+    /** 重置到准备状态。 */
     fun resetSession() {
         tickerJob?.cancel()
+        samplingJob?.cancel()
+        motionWatchJob?.cancel()
         activeSessionId = 0L
         runStartedAt = 0L
         accumulatedMillis = 0L
         _uiState.value = SessionUiState.Ready(defaultConfig, environment.value)
     }
 
-    /** 启动每秒更新一次的 ticker；调用前会取消旧 Job，保证只有一个计时循环。 */
+    /** 启动计时器：每秒更新一次。 */
     private fun startTicker() {
         tickerJob?.cancel()
         tickerJob = viewModelScope.launch {
@@ -142,7 +162,6 @@ class SessionViewModel @Inject constructor(
                 val elapsedMillis = currentElapsedMillis()
                 emitRunningState(elapsedMillis)
                 if (elapsedMillis >= sessionDurationMillis) {
-                    // 倒计时自然归零时自动结束，和用户点击“结束”走同一个完成逻辑。
                     completeSession(elapsedMillis)
                     break
                 }
@@ -151,35 +170,87 @@ class SessionViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 启动定时采样：每 10 秒保存一次光照数据。
+     *
+     * 采样间隔取 10 秒是权衡数据量和曲线细腻度：
+     * - 25 分钟会话产生约 150 条数据
+     * - Room 足够处理，UI 曲线也足够平滑
+     */
+    private fun startSampling() {
+        samplingJob?.cancel()
+        samplingJob = viewModelScope.launch {
+            while (true) {
+                val snapshot = environment.value
+                val sessionId = activeSessionId
+                if (sessionId != 0L && snapshot != null) {
+                    focusRepository.saveLightSample(
+                        sessionId = sessionId,
+                        sample = LightSample(
+                            timestamp = System.currentTimeMillis(),
+                            lux = snapshot.light.lux,
+                            level = snapshot.light.level
+                        )
+                    )
+                }
+                delay(sampleIntervalMillis.milliseconds)
+            }
+        }
+    }
+
+    /**
+     * 启动移动事件监听：收到 isSignificantMove = true 时保存。
+     *
+     * 移动事件不按定时采样，而是事件触发：
+     * - MotionEventDetector 已做防抖（600ms 窗口 + 1200ms 冷却）
+     * - 每次确认事件保存一条记录，结束时统计条数即为移动次数
+     */
+    private fun startMotionWatch() {
+        motionWatchJob?.cancel()
+        motionWatchJob = viewModelScope.launch {
+            environment.collect { snapshot ->
+                val sessionId = activeSessionId
+                val motion = snapshot?.motion
+                if (sessionId != 0L && motion != null && motion.isSignificantMove) {
+                    focusRepository.saveMotionEvent(
+                        sessionId = sessionId,
+                        event = MotionSample(
+                            timestamp = motion.timestamp,
+                            magnitude = motion.magnitude,
+                            isSignificantMove = true,
+                            isMoving = motion.isMoving
+                        )
+                    )
+                }
+            }
+        }
+    }
+
     /** 根据累计时长和最新环境快照生成 Running 状态。 */
     private fun emitRunningState(elapsedMillis: Long) {
         val snapshot = environment.value
-        // ViewModel 负责把业务数据整理成 UI 能直接显示的状态，Screen 不再自己计算剩余时间。
         _uiState.value = SessionUiState.Running(
             sessionId = activeSessionId,
             elapsedMillis = elapsedMillis,
             remainingMillis = (sessionDurationMillis - elapsedMillis).coerceAtLeast(0L),
             noiseSamples = emptyList(),
             lightLevel = snapshot?.light?.level ?: LightLevel.COMFORTABLE,
-            movementCount = if (snapshot?.motion?.isSignificantMove == true) 1 else 0
+            movementCount = 0 // Running 期间不累计，结束时从数据库统计
         )
     }
 
-    /** 调用 Repository 持久化结束结果；没有有效 sessionId 时忽略请求。 */
+    /** 持久化结束结果。 */
     private fun completeSession(elapsedMillis: Long) {
         val sessionId = activeSessionId
         if (sessionId == 0L) return
         viewModelScope.launch {
-            // ViewModel 负责算出暂停后的净专注时长，Repository 负责保存这次会话结果。
             val session = focusRepository.finishSession(sessionId, elapsedMillis)
             _uiState.value = SessionUiState.Finished(session)
         }
     }
 
-    /** 计算“暂停前累计时长 + 当前运行片段时长”，单位毫秒。 */
+    /** 计算当前累计时长。 */
     private fun currentElapsedMillis(): Long {
-        // 计时公式：暂停前累计时长 + 当前运行片段时长。
-        // 这样暂停/继续不会重复计算，也不会丢失已经专注的时间。
         val runningExtra = if (runStartedAt == 0L) {
             0L
         } else {

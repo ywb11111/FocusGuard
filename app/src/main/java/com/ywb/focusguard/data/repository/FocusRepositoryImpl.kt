@@ -1,7 +1,10 @@
 package com.ywb.focusguard.data.repository
 
 import com.ywb.focusguard.data.local.dao.FocusSessionDao
+import com.ywb.focusguard.data.local.dao.SampleDao
 import com.ywb.focusguard.data.local.entity.FocusSessionEntity
+import com.ywb.focusguard.data.local.entity.LightSampleEntity
+import com.ywb.focusguard.data.local.entity.MotionEventEntity
 import com.ywb.focusguard.data.local.mapper.toDomain
 import com.ywb.focusguard.domain.analyzer.FocusScoreAnalyzer
 import com.ywb.focusguard.domain.model.FocusConfig
@@ -15,23 +18,30 @@ import com.ywb.focusguard.domain.model.NoiseSample
 import com.ywb.focusguard.domain.model.SessionDetail
 import com.ywb.focusguard.domain.model.TodaySummary
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 专注数据的 Room 实现，负责会话生命周期、统计派生和领域模型转换。
- * 当前会话主记录已是真实数据库数据，详情采样曲线仍是 demo，等待采样表接入。
+ * 专注数据的 Room 实现，负责会话生命周期、采样保存和领域模型转换。
+ *
+ * 会话主记录已接入 Room，光照和移动采样已切换为真实数据库数据。
  */
 @Singleton
 class FocusRepositoryImpl @Inject constructor(
     /** 负责 focus_sessions 表的查询与写入。 */
     private val focusSessionDao: FocusSessionDao,
+    /** 负责采样表的查询与写入。 */
+    private val sampleDao: SampleDao,
     /** 结束会话时根据聚合指标生成可解释评分。 */
     private val scoreAnalyzer: FocusScoreAnalyzer
 ) : FocusRepository {
-    // 今日统计先在 Repository 中由 Room Flow 派生，后续数据量变大后可以下沉为 Room 聚合 SQL。
+
+    // ==================== 查询接口 ====================
+
+    /** 今日统计由 Room Flow 派生。 */
     override fun observeTodaySummary(): Flow<TodaySummary> = observeSessions().map { items ->
         val todayStart = todayStartMillis()
         val todaySessions = items.filter { it.startTime >= todayStart && it.endTime != null }
@@ -43,21 +53,48 @@ class FocusRepositoryImpl @Inject constructor(
         )
     }
 
+    /** 按开始时间倒序观察全部已完成专注会话。 */
     override fun observeSessions(): Flow<List<FocusSession>> =
         focusSessionDao.observeSessions().map { entities ->
-            // 进行中的占位记录不应出现在 Today 和 Reports 的历史列表中。
-            entities
-                .filter { it.endTime != null }
-                .map { it.toDomain() }
+            entities.filter { it.endTime != null }.map { it.toDomain() }
         }
 
-    // 详情页先读取真实会话记录，采样曲线仍使用 demo 样本；传感器阶段再替换为采样表查询。
+    /**
+     * 观察会话详情：组合主记录和采样数据。
+     *
+     * 使用 combine 同时观察主记录和采样表，任一变化都会更新详情页。
+     * 噪声采样仍使用 demo 数据（阶段 4 实现）。
+     */
     override fun observeSessionDetail(sessionId: Long): Flow<SessionDetail?> =
-        focusSessionDao.observeSession(sessionId).map { entity ->
-            val session = entity?.toDomain() ?: return@map null
+        combine(
+            focusSessionDao.observeSession(sessionId),
+            sampleDao.observeLightSamples(sessionId),
+            sampleDao.observeMotionEvents(sessionId)
+        ) { entity, lightEntities, motionEntities ->
+            val session = entity?.toDomain() ?: return@combine null
+
+            // 光照曲线：从采样表转换为领域模型
+            val lightSamples = lightEntities.map { entity ->
+                LightSample(
+                    timestamp = entity.timestamp,
+                    lux = entity.lux,
+                    level = classifyLightLevel(entity.lux)
+                )
+            }
+
+            // 移动事件：从采样表转换为领域模型
+            val motionEvents = motionEntities.map { entity ->
+                MotionSample(
+                    timestamp = entity.timestamp,
+                    magnitude = entity.magnitude,
+                    isSignificantMove = true, // 能入库的都是确认事件
+                    isMoving = true
+                )
+            }
+
+            // 噪声曲线：仍使用 demo 数据
             val noiseSamples = demoNoiseSamples(session.startTime)
-            val lightSamples = demoLightSamples(session.startTime)
-            val motionEvents = demoMotionSamples(session.startTime)
+
             SessionDetail(
                 session = session,
                 noiseSamples = noiseSamples,
@@ -67,17 +104,18 @@ class FocusRepositoryImpl @Inject constructor(
                     total = session.score,
                     noisePenalty = 8,
                     lightPenalty = 0,
-                    motionPenalty = 3,
+                    motionPenalty = motionEvents.size * 3,
                     distractionPenalty = 5,
-                    suggestions = listOf("整体环境稳定，下次可以尝试延长到 45 分钟。")
+                    suggestions = generateSuggestions(session, lightSamples, motionEvents)
                 )
             )
         }
 
+    // ==================== 会话生命周期 ====================
+
+    /** 在 Room 创建一条进行中记录，返回自增 id。 */
     override suspend fun startSession(config: FocusConfig): Long {
         val now = System.currentTimeMillis()
-        // 进行中记录先把 endTime 设为 null，其他分析字段使用默认值。
-        // 结束时 Repository 会用同一个 id 更新完整结果。
         return focusSessionDao.insertSession(
             FocusSessionEntity(
                 startTime = now,
@@ -94,51 +132,135 @@ class FocusRepositoryImpl @Inject constructor(
         )
     }
 
+    /** 结束会话：从采样表聚合统计，更新主记录并返回完整结果。 */
     override suspend fun finishSession(sessionId: Long, durationMillis: Long): FocusSession {
-        // Repository 只保存 ViewModel 提供的净专注时长，暂停时间不会被重复计算。
         val finishedAt = System.currentTimeMillis()
         val existing = focusSessionDao.getSession(sessionId)
         val startedAt = existing?.startTime ?: finishedAt
-        val focusDurationMillis = durationMillis.coerceAtLeast(0L)
+
+        // 从采样表聚合统计数据
+        val lightSamples = sampleDao.getLightSamplesOnce(sessionId)
+        val motionEvents = sampleDao.getMotionEventsOnce(sessionId)
+
+        val averageLightLux = if (lightSamples.isNotEmpty()) {
+            lightSamples.map { it.lux }.average().toFloat()
+        } else 0f
+
+        val movementCount = motionEvents.size
+
+        // 计算评分（噪声仍使用 demo 值）
         val score = scoreAnalyzer.calculate(
             averageNoiseDb = 44f,
-            averageLightLux = 220f,
-            movementCount = 1,
+            averageLightLux = averageLightLux,
+            movementCount = movementCount,
             distractionCount = 0,
-            durationMillis = focusDurationMillis
+            durationMillis = durationMillis
         )
+
+        // 更新主记录
         focusSessionDao.updateFinishedSession(
             sessionId = sessionId,
             endTime = finishedAt,
-            durationMillis = focusDurationMillis,
+            durationMillis = durationMillis,
             averageNoiseDb = 44f,
             maxNoiseDb = 60f,
-            averageLightLux = 220f,
-            movementCount = 1,
+            averageLightLux = averageLightLux,
+            movementCount = movementCount,
             distractionCount = 0,
             score = score.total,
             note = "手动结束"
         )
+
         return FocusSession(
             id = sessionId,
             startTime = startedAt,
             endTime = finishedAt,
-            durationMillis = focusDurationMillis,
+            durationMillis = durationMillis,
             averageNoiseDb = 44f,
             maxNoiseDb = 60f,
-            averageLightLux = 220f,
-            movementCount = 1,
+            averageLightLux = averageLightLux,
+            movementCount = movementCount,
             distractionCount = 0,
             score = score.total,
             note = "手动结束"
         )
     }
 
-    // 采样保存接口先留空，后续接入光照、移动、噪声时逐步实现。
-    override suspend fun saveNoiseSample(sessionId: Long, sample: NoiseSample) = Unit
-    override suspend fun saveLightSample(sessionId: Long, sample: LightSample) = Unit
-    override suspend fun saveMotionEvent(sessionId: Long, event: MotionSample) = Unit
+    // ==================== 采样保存接口 ====================
 
+    /** 保存一条光照采样到数据库。 */
+    override suspend fun saveLightSample(sessionId: Long, sample: LightSample) {
+        sampleDao.insertLightSample(
+            LightSampleEntity(
+                sessionId = sessionId,
+                timestamp = sample.timestamp,
+                lux = sample.lux
+            )
+        )
+    }
+
+    /** 保存一次已确认的移动事件到数据库。 */
+    override suspend fun saveMotionEvent(sessionId: Long, event: MotionSample) {
+        sampleDao.insertMotionEvent(
+            MotionEventEntity(
+                sessionId = sessionId,
+                timestamp = event.timestamp,
+                magnitude = event.magnitude
+            )
+        )
+    }
+
+    /** 噪声采样保存接口（阶段 4 实现）。 */
+    override suspend fun saveNoiseSample(sessionId: Long, sample: NoiseSample) {
+        // TODO: 阶段 4 接入 AudioRecord 后实现
+    }
+
+    // ==================== 私有方法 ====================
+
+    /** 根据 lux 值分类光照等级。 */
+    private fun classifyLightLevel(lux: Float): LightLevel = when {
+        lux < 10f -> LightLevel.DARK
+        lux < 100f -> LightLevel.DIM
+        lux < 500f -> LightLevel.COMFORTABLE
+        else -> LightLevel.BRIGHT
+    }
+
+    /** 生成个性化建议。 */
+    private fun generateSuggestions(
+        session: FocusSession,
+        lightSamples: List<LightSample>,
+        motionEvents: List<MotionSample>
+    ): List<String> {
+        val suggestions = mutableListOf<String>()
+
+        // 基于移动次数
+        when {
+            motionEvents.size > 5 -> suggestions.add("本次专注移动较频繁，建议将手机放在固定位置。")
+            motionEvents.size > 2 -> suggestions.add("有 ${motionEvents.size} 次移动，环境整体稳定。")
+            else -> suggestions.add("专注期间几乎没有移动，表现很好！")
+        }
+
+        // 基于光照
+        if (lightSamples.isNotEmpty()) {
+            val avgLux = lightSamples.map { it.lux }.average()
+            when {
+                avgLux < 50 -> suggestions.add("光照偏暗，建议增加环境亮度保护眼睛。")
+                avgLux > 800 -> suggestions.add("光照偏亮，可以适当调暗灯光。")
+            }
+        }
+
+        // 基于时长
+        val minutes = session.durationMillis / 60_000
+        if (minutes < 10) {
+            suggestions.add("本次专注时间较短，下次可以尝试延长到 25 分钟。")
+        } else if (minutes >= 25) {
+            suggestions.add("专注时长达标，继续保持！")
+        }
+
+        return suggestions.ifEmpty { listOf("整体环境稳定，继续保持！") }
+    }
+
+    /** Demo 噪声数据（阶段 4 后删除）。 */
     private fun demoNoiseSamples(start: Long): List<NoiseSample> = List(12) { index ->
         NoiseSample(
             timestamp = start + index * 60_000L,
@@ -147,20 +269,7 @@ class FocusRepositoryImpl @Inject constructor(
         )
     }
 
-    private fun demoLightSamples(start: Long): List<LightSample> = List(12) { index ->
-        LightSample(
-            timestamp = start + index * 60_000L,
-            lux = 160f + (index % 3) * 35f,
-            level = LightLevel.COMFORTABLE
-        )
-    }
-
-    private fun demoMotionSamples(start: Long): List<MotionSample> = listOf(
-        MotionSample(start + 12 * 60_000L, 11.2f, true),
-        MotionSample(start + 31 * 60_000L, 10.6f, true)
-    )
-
-    /** 计算设备本地时区当天 00:00 的 Unix 毫秒时间戳，用于过滤今日会话。 */
+    /** 计算设备本地时区当天 00:00 的 Unix 毫秒时间戳。 */
     private fun todayStartMillis(): Long {
         val calendar = Calendar.getInstance()
         calendar.set(Calendar.HOUR_OF_DAY, 0)

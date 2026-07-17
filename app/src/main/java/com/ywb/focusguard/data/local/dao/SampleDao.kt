@@ -12,21 +12,40 @@ import kotlinx.coroutines.flow.Flow
 /**
  * 三类环境采样表的数据库访问入口。
  *
- * 查询返回 [Flow]，Room 在表内容变化时会自动发射新列表；写入方法使用 suspend，
- * 由 Repository 在协程中调用，避免数据库操作阻塞主线程。
+ * 查询返回 [Flow]，Room 在表内容变化时会自动发射新列表；
+ * 同步查询使用 suspend，由 Repository 在协程中调用。
  */
 @Dao
 interface SampleDao {
-    // 采样表通过 sessionId 关联一次专注记录：一条 FocusSession 可以对应多条噪声/光照/移动样本。
+    // ==================== Flow 查询（用于实时观察） ====================
+
+    /** 观察指定会话的噪声采样列表。 */
     @Query("SELECT * FROM noise_samples WHERE sessionId = :sessionId ORDER BY timestamp ASC")
     fun observeNoiseSamples(sessionId: Long): Flow<List<NoiseSampleEntity>>
 
+    /** 观察指定会话的光照采样列表。 */
     @Query("SELECT * FROM light_samples WHERE sessionId = :sessionId ORDER BY timestamp ASC")
     fun observeLightSamples(sessionId: Long): Flow<List<LightSampleEntity>>
 
-    // 移动表只保存防抖后确认的事件，因此结果数量可以直接用于统计移动次数。
+    /** 观察指定会话的移动事件列表。 */
     @Query("SELECT * FROM motion_events WHERE sessionId = :sessionId ORDER BY timestamp ASC")
     fun observeMotionEvents(sessionId: Long): Flow<List<MotionEventEntity>>
+
+    // ==================== 同步查询（用于结束时聚合统计） ====================
+
+    /** 一次性获取指定会话的光照采样列表。 */
+    @Query("SELECT * FROM light_samples WHERE sessionId = :sessionId ORDER BY timestamp ASC")
+    suspend fun getLightSamplesOnce(sessionId: Long): List<LightSampleEntity>
+
+    /** 一次性获取指定会话的移动事件列表。 */
+    @Query("SELECT * FROM motion_events WHERE sessionId = :sessionId ORDER BY timestamp ASC")
+    suspend fun getMotionEventsOnce(sessionId: Long): List<MotionEventEntity>
+
+    /** 一次性获取指定会话的噪声采样列表。 */
+    @Query("SELECT * FROM noise_samples WHERE sessionId = :sessionId ORDER BY timestamp ASC")
+    suspend fun getNoiseSamplesOnce(sessionId: Long): List<NoiseSampleEntity>
+
+    // ==================== 写入接口 ====================
 
     /** 保存一条噪声采样。 */
     @Insert(onConflict = OnConflictStrategy.REPLACE)

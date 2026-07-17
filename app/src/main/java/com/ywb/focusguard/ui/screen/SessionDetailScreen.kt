@@ -67,6 +67,7 @@ private fun SessionDetailContent(
         ) {
             MetricCard("时长", uiState.durationText, Modifier.weight(1f))
             MetricCard("评分", uiState.scoreText, Modifier.weight(1f))
+            MetricCard("移动", "${uiState.motionCount} 次", Modifier.weight(1f))
         }
         SectionHeader(title = "评分拆解")
         Text(uiState.scoreBreakdownText)
