@@ -5,6 +5,7 @@ import com.ywb.focusguard.data.local.dao.SampleDao
 import com.ywb.focusguard.data.local.entity.FocusSessionEntity
 import com.ywb.focusguard.data.local.entity.LightSampleEntity
 import com.ywb.focusguard.data.local.entity.MotionEventEntity
+import com.ywb.focusguard.data.local.entity.NoiseSampleEntity
 import com.ywb.focusguard.data.local.mapper.toDomain
 import com.ywb.focusguard.domain.analyzer.FocusScoreAnalyzer
 import com.ywb.focusguard.domain.model.FocusConfig
@@ -63,15 +64,24 @@ class FocusRepositoryImpl @Inject constructor(
      * 观察会话详情：组合主记录和采样数据。
      *
      * 使用 combine 同时观察主记录和采样表，任一变化都会更新详情页。
-     * 噪声采样仍使用 demo 数据（阶段 4 实现）。
      */
     override fun observeSessionDetail(sessionId: Long): Flow<SessionDetail?> =
         combine(
             focusSessionDao.observeSession(sessionId),
+            sampleDao.observeNoiseSamples(sessionId),
             sampleDao.observeLightSamples(sessionId),
             sampleDao.observeMotionEvents(sessionId)
-        ) { entity, lightEntities, motionEntities ->
+        ) { entity, noiseEntities, lightEntities, motionEntities ->
             val session = entity?.toDomain() ?: return@combine null
+
+            // 噪声曲线：从采样表转换为领域模型
+            val noiseSamples = noiseEntities.map { entity ->
+                NoiseSample(
+                    timestamp = entity.timestamp,
+                    decibel = entity.decibel,
+                    level = classifyNoiseLevel(entity.decibel)
+                )
+            }
 
             // 光照曲线：从采样表转换为领域模型
             val lightSamples = lightEntities.map { entity ->
@@ -87,13 +97,10 @@ class FocusRepositoryImpl @Inject constructor(
                 MotionSample(
                     timestamp = entity.timestamp,
                     magnitude = entity.magnitude,
-                    isSignificantMove = true, // 能入库的都是确认事件
+                    isSignificantMove = true,
                     isMoving = true
                 )
             }
-
-            // 噪声曲线：仍使用 demo 数据
-            val noiseSamples = demoNoiseSamples(session.startTime)
 
             SessionDetail(
                 session = session,
@@ -102,7 +109,7 @@ class FocusRepositoryImpl @Inject constructor(
                 motionEvents = motionEvents,
                 score = FocusScore(
                     total = session.score,
-                    noisePenalty = 8,
+                    noisePenalty = calculateNoisePenalty(noiseSamples),
                     lightPenalty = 0,
                     motionPenalty = motionEvents.size * 3,
                     distractionPenalty = 5,
@@ -139,8 +146,17 @@ class FocusRepositoryImpl @Inject constructor(
         val startedAt = existing?.startTime ?: finishedAt
 
         // 从采样表聚合统计数据
+        val noiseSamples = sampleDao.getNoiseSamplesOnce(sessionId)
         val lightSamples = sampleDao.getLightSamplesOnce(sessionId)
         val motionEvents = sampleDao.getMotionEventsOnce(sessionId)
+
+        val averageNoiseDb = if (noiseSamples.isNotEmpty()) {
+            noiseSamples.map { it.decibel }.average().toFloat()
+        } else 0f
+
+        val maxNoiseDb = if (noiseSamples.isNotEmpty()) {
+            noiseSamples.maxOf { it.decibel }
+        } else 0f
 
         val averageLightLux = if (lightSamples.isNotEmpty()) {
             lightSamples.map { it.lux }.average().toFloat()
@@ -148,9 +164,9 @@ class FocusRepositoryImpl @Inject constructor(
 
         val movementCount = motionEvents.size
 
-        // 计算评分（噪声仍使用 demo 值）
+        // 计算评分
         val score = scoreAnalyzer.calculate(
-            averageNoiseDb = 44f,
+            averageNoiseDb = averageNoiseDb,
             averageLightLux = averageLightLux,
             movementCount = movementCount,
             distractionCount = 0,
@@ -162,8 +178,8 @@ class FocusRepositoryImpl @Inject constructor(
             sessionId = sessionId,
             endTime = finishedAt,
             durationMillis = durationMillis,
-            averageNoiseDb = 44f,
-            maxNoiseDb = 60f,
+            averageNoiseDb = averageNoiseDb,
+            maxNoiseDb = maxNoiseDb,
             averageLightLux = averageLightLux,
             movementCount = movementCount,
             distractionCount = 0,
@@ -176,8 +192,8 @@ class FocusRepositoryImpl @Inject constructor(
             startTime = startedAt,
             endTime = finishedAt,
             durationMillis = durationMillis,
-            averageNoiseDb = 44f,
-            maxNoiseDb = 60f,
+            averageNoiseDb = averageNoiseDb,
+            maxNoiseDb = maxNoiseDb,
             averageLightLux = averageLightLux,
             movementCount = movementCount,
             distractionCount = 0,
@@ -210,9 +226,15 @@ class FocusRepositoryImpl @Inject constructor(
         )
     }
 
-    /** 噪声采样保存接口（阶段 4 实现）。 */
+    /** 噪声采样保存到数据库。 */
     override suspend fun saveNoiseSample(sessionId: Long, sample: NoiseSample) {
-        // TODO: 阶段 4 接入 AudioRecord 后实现
+        sampleDao.insertNoiseSample(
+            NoiseSampleEntity(
+                sessionId = sessionId,
+                timestamp = sample.timestamp,
+                decibel = sample.decibel
+            )
+        )
     }
 
     // ==================== 私有方法 ====================
@@ -223,6 +245,26 @@ class FocusRepositoryImpl @Inject constructor(
         lux < 100f -> LightLevel.DIM
         lux < 500f -> LightLevel.COMFORTABLE
         else -> LightLevel.BRIGHT
+    }
+
+    /** 根据 dB 值分类噪声等级。 */
+    private fun classifyNoiseLevel(decibel: Float): NoiseLevel = when {
+        decibel < 40f -> NoiseLevel.QUIET
+        decibel < 60f -> NoiseLevel.NORMAL
+        decibel < 75f -> NoiseLevel.NOISY
+        else -> NoiseLevel.LOUD
+    }
+
+    /** 计算噪声扣分：基于平均噪声等级。 */
+    private fun calculateNoisePenalty(samples: List<NoiseSample>): Int {
+        if (samples.isEmpty()) return 0
+        val avgDb = samples.map { it.decibel }.average()
+        return when {
+            avgDb > 75f -> 25
+            avgDb > 65f -> 15
+            avgDb > 55f -> 8
+            else -> 0
+        }
     }
 
     /** 生成个性化建议。 */
@@ -258,15 +300,6 @@ class FocusRepositoryImpl @Inject constructor(
         }
 
         return suggestions.ifEmpty { listOf("整体环境稳定，继续保持！") }
-    }
-
-    /** Demo 噪声数据（阶段 4 后删除）。 */
-    private fun demoNoiseSamples(start: Long): List<NoiseSample> = List(12) { index ->
-        NoiseSample(
-            timestamp = start + index * 60_000L,
-            decibel = 38f + (index % 4) * 4f,
-            level = if (index % 5 == 0) NoiseLevel.NORMAL else NoiseLevel.QUIET
-        )
     }
 
     /** 计算设备本地时区当天 00:00 的 Unix 毫秒时间戳。 */

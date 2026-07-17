@@ -9,6 +9,7 @@ import com.ywb.focusguard.domain.model.FocusConfig
 import com.ywb.focusguard.domain.model.LightLevel
 import com.ywb.focusguard.domain.model.LightSample
 import com.ywb.focusguard.domain.model.MotionSample
+import com.ywb.focusguard.domain.model.NoiseSample
 import com.ywb.focusguard.ui.state.SessionUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -171,7 +172,7 @@ class SessionViewModel @Inject constructor(
     }
 
     /**
-     * 启动定时采样：每 10 秒保存一次光照数据。
+     * 启动定时采样：每 10 秒保存一次光照和噪声数据。
      *
      * 采样间隔取 10 秒是权衡数据量和曲线细腻度：
      * - 25 分钟会话产生约 150 条数据
@@ -184,12 +185,22 @@ class SessionViewModel @Inject constructor(
                 val snapshot = environment.value
                 val sessionId = activeSessionId
                 if (sessionId != 0L && snapshot != null) {
+                    // 保存光照采样
                     focusRepository.saveLightSample(
                         sessionId = sessionId,
                         sample = LightSample(
                             timestamp = System.currentTimeMillis(),
                             lux = snapshot.light.lux,
                             level = snapshot.light.level
+                        )
+                    )
+                    // 保存噪声采样
+                    focusRepository.saveNoiseSample(
+                        sessionId = sessionId,
+                        sample = NoiseSample(
+                            timestamp = System.currentTimeMillis(),
+                            decibel = snapshot.noise.decibel,
+                            level = snapshot.noise.level
                         )
                     )
                 }
