@@ -1,6 +1,7 @@
 package com.ywb.focusguard.ui.screen
 
 import android.Manifest
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +46,13 @@ fun SettingsRoute(
         viewModel.refreshPermissions()
     }
 
+    // 通知权限请求启动器（Android 13+）
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        viewModel.refreshPermissions()
+    }
+
     // 页面进入时刷新权限状态
     LaunchedEffect(Unit) {
         viewModel.refreshPermissions()
@@ -55,6 +63,11 @@ fun SettingsRoute(
         onOpenPermissionGuide = onOpenPermissionGuide,
         onRequestAudioPermission = {
             audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        },
+        onRequestNotificationPermission = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
     )
 }
@@ -63,12 +76,14 @@ fun SettingsRoute(
  * 设置页纯 UI。当前设置值来自内存 Repository，开关仍为只读展示，阶段性接入 DataStore 后可编辑。
  *
  * @param onRequestAudioPermission 请求录音权限的回调。
+ * @param onRequestNotificationPermission 请求通知权限的回调。
  */
 @Composable
 fun SettingsScreen(
     uiState: SettingsUiState,
     onOpenPermissionGuide: () -> Unit,
-    onRequestAudioPermission: () -> Unit = {}
+    onRequestAudioPermission: () -> Unit = {},
+    onRequestNotificationPermission: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -109,7 +124,11 @@ fun SettingsScreen(
                     granted = uiState.permissionState.audioGranted,
                     onRequest = if (!uiState.permissionState.audioGranted) onRequestAudioPermission else null
                 )
-                PermissionLine("通知权限", uiState.permissionState.notificationGranted)
+                PermissionLine(
+                    label = "通知权限",
+                    granted = uiState.permissionState.notificationGranted,
+                    onRequest = if (!uiState.permissionState.notificationGranted) onRequestNotificationPermission else null
+                )
                 PermissionLine("使用情况访问", uiState.permissionState.usageStatsGranted)
                 Button(onClick = onOpenPermissionGuide, modifier = Modifier.fillMaxWidth()) {
                     Text("查看权限说明")

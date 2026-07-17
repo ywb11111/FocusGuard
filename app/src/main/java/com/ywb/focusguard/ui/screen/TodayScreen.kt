@@ -2,6 +2,7 @@ package com.ywb.focusguard.ui.screen
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -57,7 +58,13 @@ fun TodayRoute(
     val audioPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        // 用户授权后立即刷新状态
+        viewModel.refreshPermissions()
+    }
+
+    // 通知权限请求启动器（Android 13+）
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
         viewModel.refreshPermissions()
     }
 
@@ -73,6 +80,11 @@ fun TodayRoute(
         onOpenSessionDetail = onOpenSessionDetail,
         onRequestAudioPermission = {
             audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        },
+        onRequestNotificationPermission = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
     )
 }
@@ -85,6 +97,7 @@ fun TodayRoute(
  * @param onOpenSettings 打开设置页。
  * @param onOpenSessionDetail 按真实会话 id 打开详情页。
  * @param onRequestAudioPermission 请求录音权限。
+ * @param onRequestNotificationPermission 请求通知权限（Android 13+）。
  */
 @Composable
 fun TodayScreen(
@@ -92,7 +105,8 @@ fun TodayScreen(
     onStartFocus: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSessionDetail: (Long) -> Unit,
-    onRequestAudioPermission: () -> Unit = {}
+    onRequestAudioPermission: () -> Unit = {},
+    onRequestNotificationPermission: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -225,6 +239,39 @@ fun TodayScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("授权录音权限")
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        // 通知权限缺失提示（Android 13+ 需要）
+        if (!uiState.permissionState.notificationGranted) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "需要通知权限",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "专注期间需要通知权限才能在前台服务中显示剩余时间和控制按钮。",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Button(
+                        onClick = onRequestNotificationPermission,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("授权通知权限")
                     }
                 }
             }

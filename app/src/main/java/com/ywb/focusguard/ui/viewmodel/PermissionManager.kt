@@ -76,4 +76,11 @@ class PermissionManager @Inject constructor(
     fun markAudioGranted() {
         _permissionState.update { it.copy(audioGranted = true) }
     }
+
+    /**
+     * 标记通知权限已授权。
+     */
+    fun markNotificationGranted() {
+        _permissionState.update { it.copy(notificationGranted = true) }
+    }
 }
