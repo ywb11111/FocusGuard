@@ -4,8 +4,6 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.ywb.focusguard.domain.model.PermissionState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +25,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class PermissionManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     private val _permissionState = MutableStateFlow(PermissionState())
 
@@ -71,7 +69,7 @@ class PermissionManager @Inject constructor(
     }
 
     /**
-     * 标记录音权限已授权（在 onRequestPermissionsResult 后调用）。
+     * 标记录音权限已授权。
      */
     fun markAudioGranted() {
         _permissionState.update { it.copy(audioGranted = true) }

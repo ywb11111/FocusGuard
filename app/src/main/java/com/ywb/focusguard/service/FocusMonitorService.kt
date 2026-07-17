@@ -20,23 +20,21 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 /**
  * 专注期间的前台服务，保证 App 切后台后传感器继续采集。
  *
- * **职责边界**：
- * - 创建并维护前台通知（显示剩余时间、暂停/结束按钮）
- * - 不直接操作传感器，传感器由 SessionViewModel 通过 EnvironmentRepository 管理
- * - 通过 Binder 提供 sessionId 查询接口，供 Activity 判断服务是否运行
- * - 订阅 SessionStateHolder 更新通知内容
+ * **核心设计**：
+ * - Service 内部独立维护计时，不依赖 ViewModel
+ * - 启动时从 Intent 读取目标时长，自己倒计时
+ * - 订阅 SessionStateHolder 的状态变化（暂停/继续/结束）
+ * - 每秒更新通知显示剩余时间
  *
  * **生命周期**：
  * - startSession 时由 Activity 调用 startForegroundService
- * - finishSession 时由 Activity 调用 stopService
+ * - finishSession 时由 Activity 调用 stopService，或 Service 自己倒计时结束
  */
 @AndroidEntryPoint
 class FocusMonitorService : Service() {
@@ -51,24 +49,26 @@ class FocusMonitorService : Service() {
         /** Intent Extra：会话 ID。 */
         const val EXTRA_SESSION_ID = "session_id"
 
-        /** Intent Extra：剩余时间（毫秒）。 */
-        const val EXTRA_REMAINING_MILLIS = "remaining_millis"
+        /** Intent Extra：目标时长（毫秒）。 */
+        const val EXTRA_DURATION_MILLIS = "duration_millis"
 
         /**
          * 启动前台服务。
          *
          * @param context Activity 或 Application Context。
          * @param sessionId Room 会话 ID。
+         * @param durationMillis 目标专注时长（毫秒）。
          */
-        fun start(context: Context, sessionId: Long) {
+        fun start(context: Context, sessionId: Long, durationMillis: Long) {
             val intent = Intent(context, FocusMonitorService::class.java).apply {
                 putExtra(EXTRA_SESSION_ID, sessionId)
+                putExtra(EXTRA_DURATION_MILLIS, durationMillis)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
                 context.startService(intent)
-            }
+        }
         }
 
         /**
@@ -79,42 +79,49 @@ class FocusMonitorService : Service() {
         }
     }
 
-    /** 当前会话 ID，由 startIntent 传入。 */
+    /** 当前会话 ID。 */
     private var sessionId: Long = 0L
+
+    /** 目标时长。 */
+    private var targetDurationMillis: Long = 0L
+
+    /** 剩余时间。 */
+    private var remainingMillis: Long = 0L
+
+    /** 是否暂停。 */
+    private var isPaused: Boolean = false
 
     /** 用于 Activity 绑定查询状态。 */
     private val binder = LocalBinder()
 
-    /** 通知管理器，用于更新通知内容。 */
+    /** 通知管理器。 */
     private lateinit var notificationManager: NotificationManager
 
-    /** 协程作用域，用于订阅状态更新。 */
+    /** 协程作用域。 */
     private val serviceScope = CoroutineScope(Dispatchers.Default)
 
-    /** 订阅任务。 */
+    /** 计时任务。 */
+    private var tickerJob: Job? = null
+
+    /** 状态订阅任务。 */
     private var stateObserverJob: Job? = null
 
     // ==================== 生命周期回调 ====================
 
-    /**
-     * 服务首次创建时初始化通知渠道。
-     */
     override fun onCreate() {
         super.onCreate()
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
     }
 
-    /**
-     * 每次 startService 调用时触发。
-     *
-     * 解析 Intent 中的 sessionId，构建前台通知并启动前台服务。
-     */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         sessionId = intent?.getLongExtra(EXTRA_SESSION_ID, 0L) ?: 0L
+        targetDurationMillis = intent?.getLongExtra(EXTRA_DURATION_MILLIS, 25 * 60 * 1000L) ?: 25 * 60 * 1000L
+        remainingMillis = targetDurationMillis
+        isPaused = false
 
         // 启动前台服务
-        val notification = buildNotification("专注进行中", "剩余时间计算中...")
+        val notification = buildNotification("专注进行中", formatTime(remainingMillis))
         ServiceCompat.startForeground(
             this,
             NOTIFICATION_ID,
@@ -122,81 +129,89 @@ class FocusMonitorService : Service() {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
         )
 
-        // 订阅状态更新
-        observeSessionState()
+        // 启动内部计时
+        startInternalTicker()
+
+        // 订阅外部控制事件
+        observeControlEvents()
 
         return START_STICKY
     }
 
-    /**
-     * Activity 可通过绑定获取 sessionId。
-     */
     override fun onBind(intent: Intent?): IBinder = binder
 
-    /**
-     * 服务销毁时移除通知，取消订阅。
-     */
     override fun onDestroy() {
+        tickerJob?.cancel()
         stateObserverJob?.cancel()
         notificationManager.cancel(NOTIFICATION_ID)
         super.onDestroy()
     }
 
-    // ==================== 公开方法 ====================
+    // ==================== 内部计时逻辑 ====================
 
     /**
-     * 更新通知显示的剩余时间。
+     * Service 内部独立计时，不依赖 ViewModel。
      *
-     * @param remainingMillis 剩余毫秒数。
+     * 这样即使 Activity 被销毁，计时仍能继续。
      */
-    fun updateNotification(remainingMillis: Long) {
-        val minutes = (remainingMillis / 1000 / 60).toInt()
-        val seconds = ((remainingMillis / 1000) % 60).toInt()
-        val timeText = String.format("%02d:%02d", minutes, seconds)
+    private fun startInternalTicker() {
+        tickerJob?.cancel()
+        tickerJob = serviceScope.launch {
+            while (remainingMillis > 0) {
+                delay(1000)
+                if (!isPaused) {
+                    remainingMillis -= 1000
+                    updateNotification(remainingMillis)
 
-        val notification = buildNotification("专注进行中", "剩余 $timeText")
-        notificationManager.notify(NOTIFICATION_ID, notification)
-    }
-
-    /**
-     * 更新通知为暂停状态。
-     */
-    fun showPaused() {
-        val notification = buildNotification("专注已暂停", "点击继续")
-        notificationManager.notify(NOTIFICATION_ID, notification)
-    }
-
-    /**
-     * 更新通知为运行状态。
-     */
-    fun showRunning(remainingMillis: Long) {
-        updateNotification(remainingMillis)
-    }
-
-    // ==================== 私有方法 ====================
-
-    /**
-     * 订阅 SessionStateHolder 的状态更新。
-     */
-    private fun observeSessionState() {
-        stateObserverJob?.cancel()
-        stateObserverJob = serviceScope.launch {
-            // 订阅剩余时间更新
-            SessionStateHolder.remainingMillis.collect { remaining ->
-                if (SessionStateHolder.isPaused.value) {
-                    showPaused()
-                } else if (remaining > 0) {
-                    updateNotification(remaining)
+                    // 同步状态给 ViewModel（如果还活着）
+                    SessionStateHolder.updateRemaining(remainingMillis)
                 }
+            }
+
+            // 倒计时结束，自动停止服务
+            if (remainingMillis <= 0) {
+                stopSelf()
             }
         }
     }
 
     /**
-     * 创建通知渠道（Android 8.0+ 必须）。
-     *
-     * 渠道设置为低重要性，避免发出声音干扰用户。
+     * 订阅外部控制事件（暂停/继续/结束）。
      */
+    private fun observeControlEvents() {
+        stateObserverJob?.cancel()
+        stateObserverJob = serviceScope.launch {
+            // 订阅暂停状态
+            SessionStateHolder.isPaused.collect { paused ->
+                isPaused = paused
+                if (paused) {
+                    showPaused()
+                } else {
+                    updateNotification(remainingMillis)
+                }
+            }
+        }
+    }
+
+    // ==================== 通知相关 ====================
+
+    private fun updateNotification(remaining: Long) {
+        val notification = buildNotification("专注进行中", formatTime(remaining))
+        notificationManager.notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun showPaused() {
+        val notification = buildNotification("专注已暂停", "点击继续")
+        notificationManager.notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun formatTime(millis: Long): String {
+        val totalSeconds = millis / 1000
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return String.format("剩余 %02d:%02d", minutes, seconds)
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -211,13 +226,6 @@ class FocusMonitorService : Service() {
         }
     }
 
-    /**
-     * 构建前台通知。
-     *
-     * @param title 通知标题。
-     * @param content 通知内容。
-     * @return 可直接用于 startForeground 的 Notification。
-     */
     private fun buildNotification(title: String, content: String): Notification {
         // 点击通知打开 App
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
@@ -246,8 +254,6 @@ class FocusMonitorService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val isPaused = SessionStateHolder.isPaused.value
-
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(content)
@@ -272,5 +278,6 @@ class FocusMonitorService : Service() {
     inner class LocalBinder : Binder() {
         fun getService(): FocusMonitorService = this@FocusMonitorService
         fun getSessionId(): Long = sessionId
+        fun getRemainingMillis(): Long = remainingMillis
     }
 }

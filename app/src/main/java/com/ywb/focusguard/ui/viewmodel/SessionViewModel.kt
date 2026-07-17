@@ -12,8 +12,6 @@ import com.ywb.focusguard.domain.model.LightSample
 import com.ywb.focusguard.domain.model.MotionSample
 import com.ywb.focusguard.domain.model.NoiseSample
 import com.ywb.focusguard.service.FocusMonitorService
-import com.ywb.focusguard.service.SessionActionReceiver
-import com.ywb.focusguard.service.SessionEventManager
 import com.ywb.focusguard.service.SessionStateHolder
 import com.ywb.focusguard.ui.state.SessionUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -92,6 +90,9 @@ class SessionViewModel @Inject constructor(
     /** 暂停前已累计的时长。 */
     private var accumulatedMillis = 0L
 
+    /** 订阅通知栏控制事件。 */
+    private var controlEventJob: Job? = null
+
     init {
         // 准备阶段持续更新环境预检
         viewModelScope.launch {
@@ -102,6 +103,16 @@ class SessionViewModel @Inject constructor(
                     } else {
                         current
                     }
+                }
+            }
+        }
+
+        // 订阅通知栏控制事件
+        viewModelScope.launch {
+            SessionStateHolder.controlEvents.collect { event ->
+                when (event) {
+                    is SessionStateHolder.ControlEvent.TogglePause -> togglePause()
+                    is SessionStateHolder.ControlEvent.Finish -> finishSession()
                 }
             }
         }
@@ -121,12 +132,7 @@ class SessionViewModel @Inject constructor(
             startSampling()
             startMotionWatch()
             // 启动前台服务
-            FocusMonitorService.start(getApplication(), activeSessionId)
-            // 注册通知栏事件回调
-            SessionEventManager.registerCallbacks(
-                onTogglePause = { togglePause() },
-                onFinish = { finishSession() }
-            )
+            FocusMonitorService.start(getApplication(), activeSessionId, sessionDurationMillis)
         }
     }
 
@@ -184,8 +190,6 @@ class SessionViewModel @Inject constructor(
         SessionStateHolder.endSession()
         // 停止前台服务
         FocusMonitorService.stop(getApplication())
-        // 注销事件回调
-        SessionEventManager.unregisterCallbacks()
         completeSession(elapsedMillis)
     }
 

@@ -6,10 +6,14 @@ import android.content.Intent
 import android.util.Log
 
 /**
- * 接收通知栏按钮点击事件，并转发给 ViewModel。
+ * 接收通知栏按钮点击事件，并通过 SharedFlow 转发给订阅者。
  *
- * 由于 Service 无法直接更新 ViewModel 状态，这里使用 BroadcastReceiver 作为桥梁：
- * - 通知栏按钮点击 -> 发送广播 -> SessionActionReceiver -> 发送事件给 ViewModel
+ * **通信链路**：
+ * 通知栏按钮点击 → BroadcastReceiver → SessionStateHolder.sendXxx() → SharedFlow → ViewModel 订阅
+ *
+ * **优点**：
+ * - 使用 Flow 替代静态回调，避免内存泄漏
+ * - 支持多订阅者，未来可扩展（如 Wear OS 控制专注）
  */
 class SessionActionReceiver : BroadcastReceiver() {
 
@@ -40,54 +44,20 @@ class SessionActionReceiver : BroadcastReceiver() {
     }
 
     /**
-     * 收到广播时，发送本地事件通知 ViewModel。
+     * 收到广播时，通过 SessionStateHolder 发送事件。
      *
-     * 当前简化实现：直接通过 SharedPreferences 或 EventBus 通知，
-     * 实际项目中可使用 LiveData、SharedFlow 或 EventBus（如 LocalBroadcastManager）。
+     * ViewModel 通过 collect SessionStateHolder.controlEvents 来响应。
      */
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             ACTION_TOGGLE_PAUSE -> {
                 Log.d(TAG, "收到暂停/继续事件")
-                // 通知 SessionViewModel 暂停或继续
-                // 这里使用静态事件总线，ViewModel 订阅此事件
-                SessionEventManager.notifyTogglePause()
+                SessionStateHolder.sendTogglePause()
             }
             ACTION_FINISH -> {
                 Log.d(TAG, "收到结束事件")
-                SessionEventManager.notifyFinish()
+                SessionStateHolder.sendFinish()
             }
         }
-    }
-}
-
-/**
- * 简化的事件管理器，用于通知 ViewModel 响应通知栏操作。
- *
- * 注意：这是一个临时实现，生产环境建议使用更健壮的事件总线。
- */
-object SessionEventManager {
-    private var togglePauseCallback: (() -> Unit)? = null
-    private var finishCallback: (() -> Unit)? = null
-
-    fun registerCallbacks(
-        onTogglePause: () -> Unit,
-        onFinish: () -> Unit
-    ) {
-        togglePauseCallback = onTogglePause
-        finishCallback = onFinish
-    }
-
-    fun unregisterCallbacks() {
-        togglePauseCallback = null
-        finishCallback = null
-    }
-
-    fun notifyTogglePause() {
-        togglePauseCallback?.invoke()
-    }
-
-    fun notifyFinish() {
-        finishCallback?.invoke()
     }
 }
