@@ -44,6 +44,11 @@
             android:name=".service.FocusMonitorService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- 接收通知栏按钮点击事件。 -->
+        <receiver
+            android:name=".service.SessionActionReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

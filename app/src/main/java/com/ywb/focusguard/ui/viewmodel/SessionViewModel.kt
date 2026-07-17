@@ -1,6 +1,7 @@
 package com.ywb.focusguard.ui.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ywb.focusguard.data.repository.EnvironmentRepository
 import com.ywb.focusguard.data.repository.FocusRepository
@@ -10,6 +11,10 @@ import com.ywb.focusguard.domain.model.LightLevel
 import com.ywb.focusguard.domain.model.LightSample
 import com.ywb.focusguard.domain.model.MotionSample
 import com.ywb.focusguard.domain.model.NoiseSample
+import com.ywb.focusguard.service.FocusMonitorService
+import com.ywb.focusguard.service.SessionActionReceiver
+import com.ywb.focusguard.service.SessionEventManager
+import com.ywb.focusguard.service.SessionStateHolder
 import com.ywb.focusguard.ui.state.SessionUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -29,14 +34,21 @@ import kotlin.time.Duration.Companion.milliseconds
  *
  * 数据库写入交给 FocusRepository，硬件监听交给 EnvironmentRepository。
  * Running 期间每 10 秒保存一次光照采样，收到移动事件时保存移动记录。
+ *
+ * **前台服务协作**：
+ * - startSession 时启动 FocusMonitorService
+ * - 每秒更新通知显示剩余时间
+ * - finishSession 时停止服务
  */
 @HiltViewModel
 class SessionViewModel @Inject constructor(
     /** 提供当前环境快照；光照和移动为真实传感器，噪声暂为演示数据。 */
     environmentRepository: EnvironmentRepository,
     /** 创建和结束 Room 会话，保存采样数据。 */
-    private val focusRepository: FocusRepository
-) : ViewModel() {
+    private val focusRepository: FocusRepository,
+    /** Android Application Context，用于启动前台服务。 */
+    application: Application
+) : AndroidViewModel(application) {
 
     /** 当前固定使用的默认专注配置，后续从 SettingsRepository 读取。 */
     private val defaultConfig = FocusConfig(durationMinutes = 25)
@@ -103,9 +115,32 @@ class SessionViewModel @Inject constructor(
             runStartedAt = now
             accumulatedMillis = 0L
             emitRunningState(elapsedMillis = 0L)
+            // 初始化共享状态
+            SessionStateHolder.startSession(activeSessionId, sessionDurationMillis)
             startTicker()
             startSampling()
             startMotionWatch()
+            // 启动前台服务
+            FocusMonitorService.start(getApplication(), activeSessionId)
+            // 注册通知栏事件回调
+            SessionEventManager.registerCallbacks(
+                onTogglePause = { togglePause() },
+                onFinish = { finishSession() }
+            )
+        }
+    }
+
+    /**
+     * 切换暂停/继续状态。
+     *
+     * 由通知栏按钮或 UI 按钮调用。
+     */
+    private fun togglePause() {
+        val current = _uiState.value
+        when (current) {
+            is SessionUiState.Running -> pauseSession()
+            is SessionUiState.Paused -> resumeSession()
+            else -> {}
         }
     }
 
@@ -123,6 +158,8 @@ class SessionViewModel @Inject constructor(
             lightLevel = current.lightLevel,
             movementCount = current.movementCount
         )
+        // 更新共享状态
+        SessionStateHolder.setPaused(true)
     }
 
     /** 继续：恢复计时和采样。 */
@@ -133,6 +170,8 @@ class SessionViewModel @Inject constructor(
         startTicker()
         startSampling()
         startMotionWatch()
+        // 更新共享状态
+        SessionStateHolder.setPaused(false)
     }
 
     /** 结束：停止所有协程，保存统计结果。 */
@@ -141,6 +180,12 @@ class SessionViewModel @Inject constructor(
         tickerJob?.cancel()
         samplingJob?.cancel()
         motionWatchJob?.cancel()
+        // 清除共享状态
+        SessionStateHolder.endSession()
+        // 停止前台服务
+        FocusMonitorService.stop(getApplication())
+        // 注销事件回调
+        SessionEventManager.unregisterCallbacks()
         completeSession(elapsedMillis)
     }
 
@@ -240,14 +285,17 @@ class SessionViewModel @Inject constructor(
     /** 根据累计时长和最新环境快照生成 Running 状态。 */
     private fun emitRunningState(elapsedMillis: Long) {
         val snapshot = environment.value
+        val remainingMillis = (sessionDurationMillis - elapsedMillis).coerceAtLeast(0L)
         _uiState.value = SessionUiState.Running(
             sessionId = activeSessionId,
             elapsedMillis = elapsedMillis,
-            remainingMillis = (sessionDurationMillis - elapsedMillis).coerceAtLeast(0L),
+            remainingMillis = remainingMillis,
             noiseSamples = emptyList(),
             lightLevel = snapshot?.light?.level ?: LightLevel.COMFORTABLE,
             movementCount = 0 // Running 期间不累计，结束时从数据库统计
         )
+        // 更新共享状态（通知使用）
+        SessionStateHolder.updateRemaining(remainingMillis)
     }
 
     /** 持久化结束结果。 */
