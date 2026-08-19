@@ -176,8 +176,8 @@ class LightSensorDataSource @Inject constructor(
 
 ### P1 强烈建议
 
-- [ ] DataStore 替换内存设置
-- [ ] 写测试：DAO、Repository、Analyzer
+- [x] DataStore 替换内存设置
+- [x] 写测试：DAO、Repository、Analyzer
 - [ ] 性能优化并记录
 - [ ] 真机校准传感器阈值
 
