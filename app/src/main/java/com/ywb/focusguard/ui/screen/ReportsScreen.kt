@@ -26,6 +26,7 @@ import com.ywb.focusguard.domain.model.FocusSession
 import com.ywb.focusguard.ui.component.MetricCard
 import com.ywb.focusguard.ui.component.SectionHeader
 import com.ywb.focusguard.ui.component.SimpleLineChart
+import com.ywb.focusguard.ui.state.ReportPeriod
 import com.ywb.focusguard.ui.state.ReportsUiState
 import com.ywb.focusguard.ui.viewmodel.ReportsViewModel
 
@@ -38,18 +39,20 @@ fun ReportsRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     ReportsScreen(
         uiState = uiState,
-        onOpenSessionDetail = onOpenSessionDetail
+        onOpenSessionDetail = onOpenSessionDetail,
+        onSwitchPeriod = viewModel::switchPeriod
     )
 }
 
 /**
- * 报告页纯 UI，展示汇总、趋势和历史列表。
- * 当前周/月切换与空列表 demo 仍是界面占位，后续接入真实日期聚合。
+ * 报告页纯 UI，展示周/月汇总、趋势和历史列表。
+ * 所有数据来自 Room，无 demo 占位。
  */
 @Composable
 fun ReportsScreen(
     uiState: ReportsUiState,
-    onOpenSessionDetail: (Long) -> Unit
+    onOpenSessionDetail: (Long) -> Unit,
+    onSwitchPeriod: (ReportPeriod) -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -65,49 +68,81 @@ fun ReportsScreen(
             )
         }
         item {
-            SingleChoiceSegmentedButtonRow {
-                listOf("本周", "本月").forEachIndexed { index, label ->
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                ReportPeriod.entries.forEachIndexed { index, period ->
                     SegmentedButton(
-                        selected = index == 0,
-                        onClick = {},
+                        selected = uiState.period == period,
+                        onClick = { onSwitchPeriod(period) },
                         shape = SegmentedButtonDefaults.itemShape(
                             index = index,
-                            count = 2
+                            count = ReportPeriod.entries.size
                         )
                     ) {
-                        Text(label)
+                        Text(period.label)
                     }
                 }
             }
         }
         item {
-            SectionHeader(title = "本周总结")
+            val summary = uiState.periodSummary
+            SectionHeader(title = "${uiState.period.label}总结")
             Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 10.dp)
             ) {
-                MetricCard("总专注", formatDuration(uiState.summary?.totalFocusMillis ?: 0L), Modifier.weight(1f))
-                MetricCard("平均分", "${uiState.summary?.averageScore ?: 0}", Modifier.weight(1f))
+                MetricCard("总专注", formatDuration(summary.totalFocusMillis), Modifier.weight(1f))
+                MetricCard("平均分", "${summary.averageScore}", Modifier.weight(1f))
+                MetricCard("次数", "${summary.sessionCount}", Modifier.weight(1f))
+            }
+            if (summary.sessionCount > 0) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp)
+                ) {
+                    MetricCard("平均噪声", "${summary.averageNoiseDb.toInt()} dB", Modifier.weight(1f))
+                    MetricCard("平均光照", "${summary.averageLightLux.toInt()} lux", Modifier.weight(1f))
+                    MetricCard("移动", "${summary.totalMovementCount} 次", Modifier.weight(1f))
+                }
             }
         }
         item {
             SectionHeader(title = "趋势")
-            // 空数据库时暂用 demo 维持页面结构，不能把这条曲线当成真实历史数据。
-            SimpleLineChart(
-                values = uiState.sessions.ifEmpty { demoSessions() }.map { it.score.toFloat() },
-                modifier = Modifier.padding(top = 10.dp)
-            )
+            if (uiState.trendValues.isNotEmpty()) {
+                SimpleLineChart(
+                    values = uiState.trendValues,
+                    modifier = Modifier.padding(top = 10.dp)
+                )
+            } else {
+                Text(
+                    text = "暂无数据，完成专注后这里会显示评分趋势。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 10.dp)
+                )
+            }
         }
         item {
             SectionHeader(title = "记录列表")
         }
-        items(uiState.sessions.ifEmpty { demoSessions() }, key = { it.id }) { session ->
-            SessionListItem(
-                session = session,
-                onClick = { onOpenSessionDetail(session.id) }
-            )
+        if (uiState.sessions.isEmpty()) {
+            item {
+                Text(
+                    text = "本${if (uiState.period == ReportPeriod.WEEK) "周" else "月"}暂无专注记录。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            items(uiState.sessions, key = { it.id }) { session ->
+                SessionListItem(
+                    session = session,
+                    onClick = { onOpenSessionDetail(session.id) }
+                )
+            }
         }
     }
 }
@@ -140,9 +175,3 @@ private fun SessionListItem(
         }
     }
 }
-
-/** 报告页空数据库时的展示占位数据，真实记录存在后不会使用。 */
-private fun demoSessions(): List<FocusSession> = listOf(
-    FocusSession(1, 0, 0, 45 * 60 * 1000L, 42f, 58f, 180f, 2, 1, 88, "晚间学习"),
-    FocusSession(2, 0, 0, 30 * 60 * 1000L, 48f, 64f, 140f, 4, 2, 76, "午后复习")
-)
