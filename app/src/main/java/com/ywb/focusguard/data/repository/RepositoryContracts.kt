@@ -40,6 +40,12 @@ interface FocusRepository {
 
     /** 保存一次属于指定会话的已确认移动事件。 */
     suspend fun saveMotionEvent(sessionId: Long, event: MotionSample)
+
+    /** 按日期范围观察已完成会话（用于周报/月报）。 */
+    fun observeSessionsInRange(startMillis: Long, endMillis: Long): Flow<List<FocusSession>>
+
+    /** 一次性获取日期范围内的会话，用于计算周/月统计。 */
+    suspend fun getSessionsInRange(startMillis: Long, endMillis: Long): List<FocusSession>
 }
 
 /**
