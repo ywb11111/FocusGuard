@@ -93,15 +93,35 @@ sealed interface SessionUiState {
     ) : SessionUiState
 }
 
+/** 报告页周期类型。 */
+enum class ReportPeriod(val label: String) {
+    WEEK("本周"),
+    MONTH("本月")
+}
+
+/** 报告页周期聚合统计。 */
+data class PeriodSummary(
+    val totalFocusMillis: Long = 0L,
+    val averageScore: Int = 0,
+    val sessionCount: Int = 0,
+    val averageNoiseDb: Float = 0f,
+    val averageLightLux: Float = 0f,
+    val totalMovementCount: Int = 0
+)
+
 /**
  * 报告页状态。
  *
- * @property sessions 按时间倒序排列的已完成会话。
- * @property summary 当前报告摘要；现阶段复用今日汇总。
+ * @property period 当前选中的周期（周/月）。
+ * @property sessions 当前周期内的已完成会话，按时间倒序。
+ * @property periodSummary 当前周期的聚合统计。
+ * @property trendValues 趋势图数据（各会话评分）。
  */
 data class ReportsUiState(
+    val period: ReportPeriod = ReportPeriod.WEEK,
     val sessions: List<FocusSession> = emptyList(),
-    val summary: TodaySummary? = null
+    val periodSummary: PeriodSummary = PeriodSummary(),
+    val trendValues: List<Float> = emptyList()
 )
 
 /**
