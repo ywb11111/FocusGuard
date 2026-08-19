@@ -13,68 +13,68 @@ class MotionEventDetectorTest {
     fun `单次超过阈值不会输出移动事件`() {
         val detector = MotionEventDetector()
 
-        val detected = detector.onSample(
-            magnitude = 12.5f,
+        val result = detector.onSample(
+            x = 12.5f, y = 0f, z = 0f,
             elapsedRealtimeMillis = 100L
         )
 
-        assertFalse(detected)
+        assertFalse(result.isSignificantMove)
     }
 
     @Test
     fun `600ms 内连续命中三次只输出一次移动事件`() {
         val detector = MotionEventDetector()
 
-        assertFalse(detector.onSample(12.5f, 100L))
-        assertFalse(detector.onSample(12.2f, 280L))
-        assertTrue(detector.onSample(12.8f, 520L))
+        assertFalse(detector.onSample(x = 12.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 100L).isSignificantMove)
+        assertFalse(detector.onSample(x = 12.2f, y = 0f, z = 0f, elapsedRealtimeMillis = 280L).isSignificantMove)
+        assertTrue(detector.onSample(x = 12.8f, y = 0f, z = 0f, elapsedRealtimeMillis = 520L).isSignificantMove)
     }
 
     @Test
     fun `命中超过时间窗口后重新累计`() {
         val detector = MotionEventDetector()
 
-        assertFalse(detector.onSample(12.5f, 100L))
-        assertFalse(detector.onSample(12.2f, 300L))
-        assertFalse(detector.onSample(12.8f, 750L))
-        assertFalse(detector.onSample(12.6f, 900L))
-        assertTrue(detector.onSample(12.7f, 1_050L))
+        assertFalse(detector.onSample(x = 12.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 100L).isSignificantMove)
+        assertFalse(detector.onSample(x = 12.2f, y = 0f, z = 0f, elapsedRealtimeMillis = 300L).isSignificantMove)
+        assertFalse(detector.onSample(x = 12.8f, y = 0f, z = 0f, elapsedRealtimeMillis = 750L).isSignificantMove)
+        assertFalse(detector.onSample(x = 12.6f, y = 0f, z = 0f, elapsedRealtimeMillis = 900L).isSignificantMove)
+        assertTrue(detector.onSample(x = 12.7f, y = 0f, z = 0f, elapsedRealtimeMillis = 1_050L).isSignificantMove)
     }
 
     @Test
     fun `冷却期内连续命中不会重复输出事件`() {
         val detector = MotionEventDetector()
 
-        detector.onSample(12.5f, 100L)
-        detector.onSample(12.2f, 280L)
-        assertTrue(detector.onSample(12.8f, 520L))
+        detector.onSample(x = 12.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 100L)
+        detector.onSample(x = 12.2f, y = 0f, z = 0f, elapsedRealtimeMillis = 280L)
+        assertTrue(detector.onSample(x = 12.8f, y = 0f, z = 0f, elapsedRealtimeMillis = 520L).isSignificantMove)
 
-        assertFalse(detector.onSample(12.5f, 700L))
-        assertFalse(detector.onSample(12.5f, 900L))
-        assertFalse(detector.onSample(12.5f, 1_100L))
+        assertFalse(detector.onSample(x = 12.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 700L).isSignificantMove)
+        assertFalse(detector.onSample(x = 12.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 900L).isSignificantMove)
+        assertFalse(detector.onSample(x = 12.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 1_100L).isSignificantMove)
     }
 
     @Test
     fun `冷却结束后需要重新连续命中三次`() {
         val detector = MotionEventDetector()
 
-        detector.onSample(12.5f, 100L)
-        detector.onSample(12.2f, 280L)
-        assertTrue(detector.onSample(12.8f, 520L))
+        detector.onSample(x = 12.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 100L)
+        detector.onSample(x = 12.2f, y = 0f, z = 0f, elapsedRealtimeMillis = 280L)
+        assertTrue(detector.onSample(x = 12.8f, y = 0f, z = 0f, elapsedRealtimeMillis = 520L).isSignificantMove)
 
-        assertFalse(detector.onSample(12.5f, 1_800L))
-        assertFalse(detector.onSample(12.5f, 2_000L))
-        assertTrue(detector.onSample(12.5f, 2_200L))
+        assertFalse(detector.onSample(x = 12.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 1_800L).isSignificantMove)
+        assertFalse(detector.onSample(x = 12.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 2_000L).isSignificantMove)
+        assertTrue(detector.onSample(x = 12.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 2_200L).isSignificantMove)
     }
 
     @Test
     fun `低于阈值的样本会中断连续命中`() {
         val detector = MotionEventDetector()
 
-        assertFalse(detector.onSample(12.5f, 100L))
-        assertFalse(detector.onSample(9.8f, 200L))
-        assertFalse(detector.onSample(12.5f, 300L))
-        assertFalse(detector.onSample(12.5f, 400L))
-        assertTrue(detector.onSample(12.5f, 500L))
+        assertFalse(detector.onSample(x = 12.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 100L).isSignificantMove)
+        assertFalse(detector.onSample(x = 0.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 200L).isSignificantMove)
+        assertFalse(detector.onSample(x = 12.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 300L).isSignificantMove)
+        assertFalse(detector.onSample(x = 12.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 400L).isSignificantMove)
+        assertTrue(detector.onSample(x = 12.5f, y = 0f, z = 0f, elapsedRealtimeMillis = 500L).isSignificantMove)
     }
 }

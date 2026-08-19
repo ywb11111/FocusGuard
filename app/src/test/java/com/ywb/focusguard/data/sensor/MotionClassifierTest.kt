@@ -15,14 +15,14 @@ class MotionClassifierTest {
     }
 
     @Test
-    fun `接近重力加速度时判定为稳定`() {
-        assertFalse(isSignificantMove(9.8f))
-        assertFalse(isSignificantMove(10.6f))
+    fun `单轴超过阈值时判定为移动`() {
+        assertTrue(isSignificantLinearAcceleration(x = 2.0f, y = 0.0f, z = 0.0f))
+        assertTrue(isSignificantLinearAcceleration(x = 0.0f, y = 0.0f, z = -2.0f))
     }
 
     @Test
-    fun `明显偏离重力加速度时判定为移动`() {
-        assertTrue(isSignificantMove(12.5f))
-        assertTrue(isSignificantMove(6.5f))
+    fun `所有轴都未超过阈值时判定为稳定`() {
+        assertFalse(isSignificantLinearAcceleration(x = 0.1f, y = 0.1f, z = 0.1f))
+        assertFalse(isSignificantLinearAcceleration(x = 0.5f, y = 0.5f, z = 0.5f))
     }
 }

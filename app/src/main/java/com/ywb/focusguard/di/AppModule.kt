@@ -5,12 +5,12 @@ import androidx.room.Room
 import com.ywb.focusguard.data.local.dao.FocusSessionDao
 import com.ywb.focusguard.data.local.dao.SampleDao
 import com.ywb.focusguard.data.local.database.FocusGuardDatabase
+import com.ywb.focusguard.data.repository.DataStoreSettingsRepository
 import com.ywb.focusguard.data.repository.EnvironmentRepository
 import com.ywb.focusguard.data.repository.EnvironmentRepositoryImpl
 import com.ywb.focusguard.data.repository.FocusRepository
 import com.ywb.focusguard.data.repository.FocusRepositoryImpl
 import com.ywb.focusguard.data.repository.SettingsRepository
-import com.ywb.focusguard.data.repository.SettingsRepositoryImpl
 import com.ywb.focusguard.domain.analyzer.EnvironmentAnalyzer
 import com.ywb.focusguard.domain.analyzer.FocusScoreAnalyzer
 import dagger.Binds
@@ -34,11 +34,6 @@ abstract class RepositoryModule {
     @Singleton
     /** 环境 Repository 在全局共享，避免每个页面重复创建协调对象。 */
     abstract fun bindEnvironmentRepository(repository: EnvironmentRepositoryImpl): EnvironmentRepository
-
-    @Binds
-    @Singleton
-    /** 当前绑定内存设置实现，后续可无感替换为 DataStore 实现。 */
-    abstract fun bindSettingsRepository(repository: SettingsRepositoryImpl): SettingsRepository
 }
 
 /** 提供无法直接使用构造函数注入的 Room 和无状态 Analyzer 对象。 */
@@ -76,4 +71,17 @@ object AppModule {
     @Singleton
     /** 评分分析器无可变状态，可作为全局单例复用。 */
     fun provideFocusScoreAnalyzer(): FocusScoreAnalyzer = FocusScoreAnalyzer()
+
+    /**
+     * 提供 DataStore 实现的 SettingsRepository。
+     *
+     * 为什么用 @Provides 而不是 @Binds？
+     * DataStoreSettingsRepository 构造函数需要 Context 参数，
+     * @Binds 只能用于简单的构造函数注入场景。
+     * @Provides 可以在方法内部完成复杂的依赖组装。
+     */
+    @Provides
+    @Singleton
+    fun provideSettingsRepository(@ApplicationContext context: Context): SettingsRepository =
+        DataStoreSettingsRepository(context)
 }
