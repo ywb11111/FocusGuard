@@ -40,7 +40,7 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 @HiltViewModel
 class SessionViewModel @Inject constructor(
-    /** 提供当前环境快照；光照和移动为真实传感器，噪声暂为演示数据。 */
+    /** 提供当前环境快照；光照、噪声和移动均为真实传感器数据。 */
     environmentRepository: EnvironmentRepository,
     /** 创建和结束 Room 会话，保存采样数据。 */
     private val focusRepository: FocusRepository,

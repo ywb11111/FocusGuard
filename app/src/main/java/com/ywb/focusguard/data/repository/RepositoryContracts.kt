@@ -49,8 +49,8 @@ interface FocusRepository {
 }
 
 /**
- * 环境实时数据边界，统一屏蔽 SensorManager 和未来的 AudioRecord 实现细节。
- * 光照与移动当前是真实数据，噪声暂时仍是演示数据。
+ * 环境实时数据边界，统一屏蔽 SensorManager 和 AudioRecord 实现细节。
+ * 光照、噪声和移动均为真实传感器数据（AudioRecord + SensorManager）。
  */
 interface EnvironmentRepository {
     /** 观察实时噪声样本。 */

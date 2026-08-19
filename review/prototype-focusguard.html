@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FocusGuard · UI 原型</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf0 100%);
+      min-height: 100vh;
+      padding: 48px 24px;
+    }
+    #root { max-width: 1400px; margin: 0 auto; }
+    .screen-label {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 12px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+    }
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-8px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes countUp {
+      from { opacity: 0; transform: scale(0.8); }
+      to { opacity: 1; transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    // ========== iOS Frame ==========
+    const iosFrameStyles = {
+      wrapper: {
+        display: 'inline-block',
+        padding: 10,
+        background: '#1a1a1a',
+        borderRadius: 44,
+        boxShadow: '0 12px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.1) inset',
+        position: 'relative',
+      },
+      screen: {
+        position: 'relative',
+        borderRadius: 36,
+        overflow: 'hidden',
+        background: '#f8fafb',
+      },
+      dynamicIsland: {
+        position: 'absolute',
+        top: 10,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: 110,
+        height: 32,
+        background: '#000',
+        borderRadius: 999,
+        zIndex: 30,
+      },
+      statusBar: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 48,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 28px',
+        fontSize: 14,
+        fontWeight: '600',
+        fontFamily: '-apple-system, "SF Pro Text", sans-serif',
+        zIndex: 20,
+        pointerEvents: 'none',
+      },
+      content: {
+        position: 'absolute',
+        top: 48,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        overflow: 'auto',
+      },
+      homeIndicator: {
+        position: 'absolute',
+        bottom: 8,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: 120,
+        height: 4,
+        background: 'rgba(0,0,0,0.2)',
+        borderRadius: 999,
+        zIndex: 10,
+      },
+    };
+
+    function IosFrame({ children, width = 375, height = 720, time = '9:41' }) {
+      return (
+        <div style={iosFrameStyles.wrapper}>
+          <div style={{ ...iosFrameStyles.screen, width, height }}>
+            <div style={iosFrameStyles.dynamicIsland} />
+            <div style={{ ...iosFrameStyles.statusBar, color: '#1f2937' }}>
+              <span>{time}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <svg width="16" height="12" viewBox="0 0 16 12" fill="#1f2937">
+                  <path d="M1 4h2v8H1zM4 3h2v9H4zM7 2h2v10H7zM10 1h2v11h-2zM13 0h2v12h-2z" opacity="0.3"/>
+                  <path d="M1 4h2v8H1zM4 3h2v9H4zM7 2h2v10H7zM10 1h2v11h-2z"/>
+                </svg>
+                <svg width="16" height="11" viewBox="0 0 16 11" fill="#1f2937">
+                  <path d="M8 10a1 1 0 100-2 1 1 0 000 2z"/>
+                  <path d="M4.5 6a6 6 0 017 0" stroke="#1f2937" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+                  <path d="M2 3.5a10 10 0 0112 0" stroke="#1f2937" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity="0.5"/>
+                </svg>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <div style={{ width: 22, height: 10, border: '1.2px solid #1f2937', borderRadius: 2.5, padding: 1.5 }}>
+                    <div style={{ width: '80%', height: '100%', background: '#1f2937', borderRadius: 1 }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style={iosFrameStyles.content}>{children}</div>
+            <div style={iosFrameStyles.homeIndicator} />
+          </div>
+        </div>
+      );
+    }
+
+    // ========== Design Tokens ==========
+    const tokens = {
+      colors: {
+        primary: '#6ee7b7',      // 薄荷绿 - 主色
+        primaryDark: '#34d399',  // 深薄荷
+        secondary: '#93c5fd',    // 天蓝
+        accent: '#fbbf24',       // 琥珀黄
+        warning: '#f87171',      // 珊瑚红
+        bg: '#f8fafb',           // 米白背景
+        card: '#ffffff',
+        text: '#1f2937',
+        textLight: '#6b7280',
+        border: '#e5e7eb',
+      },
+      radius: {
+        sm: 8,
+        md: 12,
+        lg: 16,
+        xl: 24,
+      },
+      shadow: {
+        sm: '0 1px 3px rgba(0,0,0,0.04)',
+        md: '0 4px 12px rgba(0,0,0,0.06)',
+        lg: '0 8px 24px rgba(0,0,0,0.08)',
+      },
+    };
+
+    // ========== Components ==========
+
+    // 底部导航
+    function TabBar({ active, onChange }) {
+      const tabs = [
+        { id: 'today', label: '今日', icon: '☀️' },
+        { id: 'session', label: '专注', icon: '🎯' },
+        { id: 'reports', label: '报告', icon: '📊' },
+        { id: 'profile', label: '我的', icon: '👤' },
+      ];
+
+      return (
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 64,
+          background: '#fff',
+          borderTop: `1px solid ${tokens.colors.border}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-around',
+          paddingBottom: 8,
+        }}>
+          {tabs.map(tab => (
+            <div
+              key={tab.id}
+              onClick={() => onChange(tab.id)}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 2,
+                cursor: 'pointer',
+                transition: 'transform 0.2s ease',
+                transform: active === tab.id ? 'scale(1.05)' : 'scale(1)',
+              }}
+            >
+              <span style={{ fontSize: 22, filter: active === tab.id ? 'none' : 'grayscale(0.4)' }}>
+                {tab.icon}
+              </span>
+              <span style={{
+                fontSize: 11,
+                fontWeight: active === tab.id ? 600 : 400,
+                color: active === tab.id ? tokens.colors.primaryDark : tokens.colors.textLight,
+              }}>
+                {tab.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // 卡片组件
+    function Card({ children, style = {}, onClick }) {
+      return (
+        <div
+          onClick={onClick}
+          style={{
+            background: tokens.colors.card,
+            borderRadius: tokens.radius.lg,
+            padding: 16,
+            boxShadow: tokens.shadow.sm,
+            border: `1px solid ${tokens.colors.border}`,
+            cursor: onClick ? 'pointer' : 'default',
+            transition: 'all 0.2s ease',
+            ...style,
+          }}
+        >
+          {children}
+        </div>
+      );
+    }
+
+    // 环境指标卡片
+    function EnvCard({ icon, label, value, status, color }) {
+      const statusColors = {
+        good: tokens.colors.primaryDark,
+        normal: tokens.colors.accent,
+        warning: tokens.colors.warning,
+      };
+
+      return (
+        <Card style={{ flex: 1, padding: 14 }}>
+          <div style={{ fontSize: 20, marginBottom: 6 }}>{icon}</div>
+          <div style={{ fontSize: 11, color: tokens.colors.textLight, marginBottom: 4 }}>{label}</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: tokens.colors.text, marginBottom: 4 }}>{value}</div>
+          <div style={{
+            fontSize: 10,
+            color: statusColors[status],
+            fontWeight: 500,
+          }}>
+            {status === 'good' ? '✓ 适中' : status === 'normal' ? '○ 一般' : '⚠ 偏高'}
+          </div>
+        </Card>
+      );
+    }
+
+    // ========== 今日页 ==========
+    function TodayScreen() {
+      return (
+        <div style={{ padding: 20, paddingBottom: 80 }}>
+          {/* 顶部问候 */}
+          <div style={{ marginBottom: 24, animation: 'fadeInUp 0.5s ease' }}>
+            <div style={{ fontSize: 13, color: tokens.colors.textLight, marginBottom: 4 }}>早上好</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: tokens.colors.text }}>今天准备好专注了吗？</div>
+          </div>
+
+          {/* 环境状态 */}
+          <div style={{
+            display: 'flex',
+            gap: 10,
+            marginBottom: 20,
+            animation: 'fadeInUp 0.5s ease 0.1s both',
+          }}>
+            <EnvCard icon="🔊" label="噪声" value="42 dB" status="good" />
+            <EnvCard icon="💡" label="光照" value="320 lux" status="good" />
+            <EnvCard icon="📱" label="移动" value="稳定" status="good" />
+          </div>
+
+          {/* 主按钮 - 开始专注 */}
+          <div style={{
+            animation: 'fadeInUp 0.5s ease 0.2s both',
+          }}>
+            <Card
+              onClick={() => {}}
+              style={{
+                background: `linear-gradient(135deg, ${tokens.colors.primary} 0%, ${tokens.colors.primaryDark} 100%)`,
+                padding: 28,
+                textAlign: 'center',
+                border: 'none',
+              }}
+            >
+              <div style={{ fontSize: 48, marginBottom: 12 }}>🎯</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#065f46', marginBottom: 8 }}>开始专注</div>
+              <div style={{ fontSize: 13, color: '#047857', opacity: 0.8 }}>环境适合专注，现在开始吧</div>
+            </Card>
+          </div>
+
+          {/* 今日统计 */}
+          <div style={{ marginTop: 24, animation: 'fadeInUp 0.5s ease 0.3s both' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: tokens.colors.text }}>今日概览</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <Card style={{ flex: 1, textAlign: 'center' }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: tokens.colors.primaryDark }}>2h 30m</div>
+                <div style={{ fontSize: 12, color: tokens.colors.textLight, marginTop: 4 }}>专注时长</div>
+              </Card>
+              <Card style={{ flex: 1, textAlign: 'center' }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: tokens.colors.accent }}>86</div>
+                <div style={{ fontSize: 12, color: tokens.colors.textLight, marginTop: 4 }}>平均评分</div>
+              </Card>
+              <Card style={{ flex: 1, textAlign: 'center' }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: tokens.colors.secondary }}>4</div>
+                <div style={{ fontSize: 12, color: tokens.colors.textLight, marginTop: 4 }}>专注次数</div>
+              </Card>
+            </div>
+          </div>
+
+          {/* 最近记录 */}
+          <div style={{ marginTop: 24, animation: 'fadeInUp 0.5s ease 0.4s both' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: tokens.colors.text }}>最近记录</div>
+            <Card style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: tokens.colors.text }}>20:00 - 20:45</div>
+                <div style={{ fontSize: 12, color: tokens.colors.textLight, marginTop: 2 }}>45 分钟 · 环境良好</div>
+              </div>
+              <div style={{
+                background: tokens.colors.primary,
+                color: '#065f46',
+                padding: '6px 12px',
+                borderRadius: tokens.radius.md,
+                fontSize: 13,
+                fontWeight: 600,
+              }}>
+                评分 88
+              </div>
+            </Card>
+          </div>
+
+          <TabBar active="today" onChange={() => {}} />
+        </div>
+      );
+    }
+
+    // ========== 专注页 ==========
+    function SessionScreen() {
+      const [state, setState] = React.useState('ready'); // ready, running, finished
+
+      return (
+        <div style={{ padding: 20, paddingBottom: 80, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {state === 'ready' && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', animation: 'fadeInUp 0.5s ease' }}>
+              {/* 时长选择 */}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: tokens.colors.text }}>选择时长</div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {[25, 45, 60].map(mins => (
+                    <Card key={mins} style={{
+                      flex: 1,
+                      textAlign: 'center',
+                      background: mins === 25 ? tokens.colors.primary : tokens.colors.card,
+                    }}>
+                      <div style={{
+                        fontSize: 20,
+                        fontWeight: 700,
+                        color: mins === 25 ? '#065f46' : tokens.colors.text,
+                      }}>{mins}</div>
+                      <div style={{
+                        fontSize: 11,
+                        color: mins === 25 ? '#047857' : tokens.colors.textLight,
+                        marginTop: 2,
+                      }}>分钟</div>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+
+              {/* 环境预检 */}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: tokens.colors.text }}>环境预检</div>
+                <Card>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {[
+                      { icon: '🔊', label: '噪声', status: '正常' },
+                      { icon: '💡', label: '光照', status: '舒适' },
+                      { icon: '📱', label: '手机', status: '稳定' },
+                    ].map(item => (
+                      <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span style={{ fontSize: 18 }}>{item.icon}</span>
+                        <span style={{ flex: 1, fontSize: 14, color: tokens.colors.text }}>{item.label}</span>
+                        <span style={{
+                          color: tokens.colors.primaryDark,
+                          fontSize: 13,
+                          fontWeight: 500,
+                        }}>✓ {item.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </div>
+
+              {/* 开始按钮 */}
+              <Card
+                onClick={() => setState('running')}
+                style={{
+                  marginTop: 'auto',
+                  background: `linear-gradient(135deg, ${tokens.colors.primary} 0%, ${tokens.colors.primaryDark} 100%)`,
+                  padding: 24,
+                  textAlign: 'center',
+                  border: 'none',
+                }}
+              >
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#065f46' }}>开始专注</div>
+              </Card>
+            </div>
+          )}
+
+          {state === 'running' && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', animation: 'fadeInUp 0.5s ease' }}>
+              {/* 倒计时 */}
+              <div style={{ textAlign: 'center', marginTop: 60, marginBottom: 40 }}>
+                <div style={{
+                  fontSize: 64,
+                  fontWeight: 700,
+                  color: tokens.colors.text,
+                  letterSpacing: '-0.02em',
+                  animation: 'pulse 2s ease-in-out infinite',
+                }}>
+                  24:31
+                </div>
+                <div style={{ fontSize: 14, color: tokens.colors.textLight, marginTop: 8 }}>剩余时间</div>
+              </div>
+
+              {/* 环境实时数据 */}
+              <Card style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+                  {[
+                    { icon: '🔊', value: '38 dB', color: tokens.colors.primaryDark },
+                    { icon: '💡', value: '285 lux', color: tokens.colors.accent },
+                    { icon: '📱', value: '0 次', color: tokens.colors.secondary },
+                  ].map(item => (
+                    <div key={item.value} style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 20, marginBottom: 4 }}>{item.icon}</div>
+                      <div style={{ fontSize: 16, fontWeight: 600, color: item.color }}>{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
+              {/* 控制按钮 */}
+              <div style={{ display: 'flex', gap: 12, marginTop: 'auto' }}>
+                <Card style={{ flex: 1, textAlign: 'center', padding: 18 }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: tokens.colors.textLight }}>暂停</div>
+                </Card>
+                <Card
+                  onClick={() => setState('finished')}
+                  style={{
+                    flex: 1,
+                    textAlign: 'center',
+                    padding: 18,
+                    background: tokens.colors.warning,
+                  }}
+                >
+                  <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>结束</div>
+                </Card>
+              </div>
+            </div>
+          )}
+
+          {state === 'finished' && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', animation: 'fadeInUp 0.5s ease' }}>
+              {/* 完成卡片 */}
+              <div style={{ textAlign: 'center', marginTop: 40 }}>
+                <div style={{ fontSize: 64, marginBottom: 16 }}>🎉</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: tokens.colors.text, marginBottom: 8 }}>专注完成！</div>
+                <div style={{ fontSize: 14, color: tokens.colors.textLight }}>你专注了 25 分钟</div>
+              </div>
+
+              {/* 评分 */}
+              <Card style={{ marginTop: 32, textAlign: 'center' }}>
+                <div style={{
+                  fontSize: 56,
+                  fontWeight: 700,
+                  color: tokens.colors.primaryDark,
+                  marginBottom: 12,
+                  animation: 'countUp 0.5s ease',
+                }}>
+                  88
+                </div>
+                <div style={{ fontSize: 16, color: tokens.colors.textLight, marginBottom: 16 }}>环境评分</div>
+
+                {/* 评分拆解 */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' }}>
+                  {[
+                    { label: '噪声', score: 24, max: 25, color: tokens.colors.primaryDark },
+                    { label: '光照', score: 18, max: 20, color: tokens.colors.accent },
+                    { label: '移动', score: 18, max: 20, color: tokens.colors.secondary },
+                    { label: '时长', score: 28, max: 35, color: tokens.colors.primary },
+                  ].map(item => (
+                    <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 12, color: tokens.colors.textLight, width: 40 }}>{item.label}</span>
+                      <div style={{ flex: 1, height: 6, background: tokens.colors.border, borderRadius: 3 }}>
+                        <div style={{
+                          width: `${(item.score / item.max) * 100}%`,
+                          height: '100%',
+                          background: item.color,
+                          borderRadius: 3,
+                        }} />
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: tokens.colors.text }}>
+                        {item.score}/{item.max}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
+              {/* 按钮 */}
+              <Card
+                onClick={() => setState('ready')}
+                style={{
+                  marginTop: 'auto',
+                  textAlign: 'center',
+                  padding: 18,
+                  background: tokens.colors.primary,
+                }}
+              >
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#065f46' }}>继续专注</div>
+              </Card>
+            </div>
+          )}
+
+          <TabBar active="session" onChange={() => {}} />
+        </div>
+      );
+    }
+
+    // ========== 报告页 ==========
+    function ReportsScreen() {
+      return (
+        <div style={{ padding: 20, paddingBottom: 80 }}>
+          {/* 周/月切换 */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            {['本周', '本月'].map(tab => (
+              <div
+                key={tab}
+                style={{
+                  padding: '8px 16px',
+                  background: tab === '本周' ? tokens.colors.primary : 'transparent',
+                  borderRadius: tokens.radius.md,
+                  fontSize: 14,
+                  fontWeight: tab === '本周' ? 600 : 400,
+                  color: tab === '本周' ? '#065f46' : tokens.colors.textLight,
+                  cursor: 'pointer',
+                }}
+              >
+                {tab}
+              </div>
+            ))}
+          </div>
+
+          {/* 周统计 */}
+          <div style={{ animation: 'fadeInUp 0.5s ease' }}>
+            <Card style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, color: tokens.colors.text }}>本周总结</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: tokens.colors.primaryDark }}>12h 30m</div>
+                  <div style={{ fontSize: 12, color: tokens.colors.textLight, marginTop: 2 }}>总专注时长</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: tokens.colors.accent }}>82</div>
+                  <div style={{ fontSize: 12, color: tokens.colors.textLight, marginTop: 2 }}>平均评分</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: tokens.colors.secondary }}>5</div>
+                  <div style={{ fontSize: 12, color: tokens.colors.textLight, marginTop: 2 }}>专注天数</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: tokens.colors.text }}>晚上 20:00</div>
+                  <div style={{ fontSize: 12, color: tokens.colors.textLight, marginTop: 2 }}>最佳时段</div>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* 趋势图（简化版） */}
+          <div style={{ animation: 'fadeInUp 0.5s ease 0.1s both' }}>
+            <Card style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: tokens.colors.text }}>专注趋势</div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 100 }}>
+                {[
+                  { day: '一', height: 60 },
+                  { day: '二', height: 80 },
+                  { day: '三', height: 45 },
+                  { day: '四', height: 90 },
+                  { day: '五', height: 70 },
+                  { day: '六', height: 100 },
+                  { day: '日', height: 55 },
+                ].map(item => (
+                  <div key={item.day} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <div style={{
+                      width: '100%',
+                      height: item.height,
+                      background: `linear-gradient(to top, ${tokens.colors.primary} 0%, ${tokens.colors.primaryDark} 100%)`,
+                      borderRadius: 4,
+                    }} />
+                    <span style={{ fontSize: 10, color: tokens.colors.textLight }}>{item.day}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+
+          {/* 历史记录 */}
+          <div style={{ animation: 'fadeInUp 0.5s ease 0.2s both' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: tokens.colors.text }}>历史记录</div>
+            {[
+              { time: '今天 20:00', duration: '45分钟', score: 88 },
+              { time: '今天 14:30', duration: '25分钟', score: 82 },
+              { time: '昨天 19:00', duration: '45分钟', score: 76 },
+            ].map((record, idx) => (
+              <Card key={idx} style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: tokens.colors.text }}>{record.time}</div>
+                  <div style={{ fontSize: 12, color: tokens.colors.textLight, marginTop: 2 }}>{record.duration}</div>
+                </div>
+                <div style={{
+                  background: tokens.colors.primary,
+                  color: '#065f46',
+                  padding: '6px 12px',
+                  borderRadius: tokens.radius.md,
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}>
+                  {record.score}
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          <TabBar active="reports" onChange={() => {}} />
+        </div>
+      );
+    }
+
+    // ========== 我的页 ==========
+    function ProfileScreen() {
+      return (
+        <div style={{ padding: 20, paddingBottom: 80 }}>
+          {/* 用户资料 */}
+          <div style={{ animation: 'fadeInUp 0.5s ease' }}>
+            <Card style={{ textAlign: 'center', padding: 24, marginBottom: 20 }}>
+              <div style={{
+                width: 80,
+                height: 80,
+                borderRadius: '50%',
+                background: `linear-gradient(135deg, ${tokens.colors.primary} 0%, ${tokens.colors.secondary} 100%)`,
+                margin: '0 auto 12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 36,
+              }}>
+                😊
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: tokens.colors.text, marginBottom: 4 }}>小明同学</div>
+              <div style={{ fontSize: 13, color: tokens.colors.textLight }}>本地账号 · 已同步 127 条记录</div>
+            </Card>
+          </div>
+
+          {/* 成就统计 */}
+          <div style={{ animation: 'fadeInUp 0.5s ease 0.1s both' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: tokens.colors.text }}>我的成就</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {[
+                { icon: '⏱', label: '总时长', value: '45h 20m' },
+                { icon: '📅', label: '专注天数', value: '32 天' },
+                { icon: '🔥', label: '连续专注', value: '7 天' },
+                { icon: '⭐', label: '平均评分', value: '84 分' },
+              ].map(item => (
+                <Card key={item.label}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>{item.icon}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: tokens.colors.text, marginBottom: 2 }}>{item.value}</div>
+                  <div style={{ fontSize: 12, color: tokens.colors.textLight }}>{item.label}</div>
+                </Card>
+              ))}
+            </div>
+          </div>
+
+          {/* 专注设置 */}
+          <div style={{ marginTop: 24, animation: 'fadeInUp 0.5s ease 0.2s both' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: tokens.colors.text }}>专注设置</div>
+            <Card>
+              {[
+                { icon: '⏰', label: '默认时长', value: '25 分钟' },
+                { icon: '🔔', label: '噪声提醒', value: '已开启' },
+                { icon: '💡', label: '光照范围', value: '100-500 lux' },
+                { icon: '通知', label: '通知权限', value: '已授权' },
+              ].map((item, idx) => (
+                <div
+                  key={item.label}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 0',
+                    borderBottom: idx < 3 ? `1px solid ${tokens.colors.border}` : 'none',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 18 }}>{item.icon}</span>
+                    <span style={{ fontSize: 15, color: tokens.colors.text }}>{item.label}</span>
+                  </div>
+                  <span style={{ fontSize: 14, color: tokens.colors.textLight }}>{item.value}</span>
+                </div>
+              ))}
+            </Card>
+          </div>
+
+          {/* 高级设置 */}
+          <div style={{ marginTop: 24, animation: 'fadeInUp 0.5s ease 0.3s both' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: tokens.colors.text }}>高级设置</div>
+            <Card>
+              {[
+                { icon: '📁', label: '导出数据' },
+                { icon: '🗑', label: '清除数据' },
+                { icon: 'ℹ️', label: '关于项目' },
+                { icon: '📝', label: '版本 1.0.0' },
+              ].map((item, idx) => (
+                <div
+                  key={item.label}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 0',
+                    borderBottom: idx < 3 ? `1px solid ${tokens.colors.border}` : 'none',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 18 }}>{item.icon}</span>
+                    <span style={{ fontSize: 15, color: tokens.colors.text }}>{item.label}</span>
+                  </div>
+                  <span style={{ fontSize: 14, color: tokens.colors.textLight }}>›</span>
+                </div>
+              ))}
+            </Card>
+          </div>
+
+          <TabBar active="profile" onChange={() => {}} />
+        </div>
+      );
+    }
+
+    // ========== 主应用 ==========
+    function App() {
+      return (
+        <div>
+          <div style={{ textAlign: 'center', marginBottom: 48 }}>
+            <h1 style={{ fontSize: 32, fontWeight: 700, color: '#1f2937', marginBottom: 8 }}>FocusGuard · UI 原型</h1>
+            <p style={{ fontSize: 16, color: '#6b7280' }}>温暖友好型 · 微交互设计 · 4 个核心页面</p>
+          </div>
+
+          {/* 4 页并排展示 */}
+          <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <div>
+              <div className="screen-label">今日页</div>
+              <IosFrame><TodayScreen /></IosFrame>
+            </div>
+            <div>
+              <div className="screen-label">专注页</div>
+              <IosFrame><SessionScreen /></IosFrame>
+            </div>
+            <div>
+              <div className="screen-label">报告页</div>
+              <IosFrame><ReportsScreen /></IosFrame>
+            </div>
+            <div>
+              <div className="screen-label">我的页</div>
+              <IosFrame><ProfileScreen /></IosFrame>
+            </div>
+          </div>
+
+          {/* 设计说明 */}
+          <div style={{ marginTop: 48, padding: 24, background: '#fff', borderRadius: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1f2937', marginBottom: 16 }}>设计说明</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: tokens.colors.primaryDark }}>🎨 设计风格</h3>
+                <ul style={{ fontSize: 14, color: '#4b5563', lineHeight: 1.8, paddingLeft: 20 }}>
+                  <li>温暖友好型：圆角卡片、柔和色彩</li>
+                  <li>主色调：薄荷绿 #6ee7b7，传递清新专注感</li>
+                  <li>辅色：天蓝 #93c5fd、琥珀黄 #fbbf24</li>
+                  <li>适合学生群体，视觉轻松无压力</li>
+                </ul>
+              </div>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: tokens.colors.primaryDark }}>✨ 动效策略</h3>
+                <ul style={{ fontSize: 14, color: '#4b5563', lineHeight: 1.8, paddingLeft: 20 }}>
+                  <li>页面切换：流畅淡入淡出</li>
+                  <li>按钮交互：按下缩放、hover 反馈</li>
+                  <li>数据加载：渐现动画</li>
+                  <li>避免花哨，追求「响应感」和「高级感」</li>
+                </ul>
+              </div>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: tokens.colors.primaryDark }}>📱 页面重点</h3>
+                <ul style={{ fontSize: 14, color: '#4b5563', lineHeight: 1.8, paddingLeft: 20 }}>
+                  <li><strong>今日页</strong>：突出「开始专注」大按钮</li>
+                  <li><strong>专注页</strong>：三状态切换（准备/进行/完成）</li>
+                  <li><strong>报告页</strong>：单页滚动展示统计数据</li>
+                  <li><strong>我的页</strong>：资料+成就+设置整合</li>
+                </ul>
+              </div>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: tokens.colors.primaryDark }}>🔐 登录方式</h3>
+                <ul style={{ fontSize: 14, color: '#4b5563', lineHeight: 1.8, paddingLeft: 20 }}>
+                  <li>仅本地账号（Device ID）</li>
+                  <li>无需后端服务器</li>
+                  <li>数据存储在本地</li>
+                  <li>适合 MVP 和面试展示</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

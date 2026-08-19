@@ -139,7 +139,7 @@ fun TodayScreen(
         val environment = uiState.environment
         StatusCard(
             title = environment?.let { EnvironmentAnalyzer().headline(it) } ?: "正在读取环境",
-            subtitle = "光照和移动来自手机传感器，噪声检测将在下一阶段接入。"
+            subtitle = "光照、噪声和移动均来自手机传感器，实时环境监测中。"
         )
 
         SectionHeader(title = "实时指标")
