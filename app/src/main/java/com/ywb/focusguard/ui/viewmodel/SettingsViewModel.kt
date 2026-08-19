@@ -8,13 +8,14 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /** 把 SettingsRepository 的设置流转换为设置页 UiState。 */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    /** 当前为内存实现，后续替换 DataStore 时 ViewModel 接口无需变化。 */
-    settingsRepository: SettingsRepository,
+    /** 设置仓库，提供读写能力。内存实现阶段后续替换为 DataStore 时接口无需变化。 */
+    private val settingsRepository: SettingsRepository,
     /** 提供权限状态检查。 */
     private val permissionManager: PermissionManager
 ) : ViewModel() {
@@ -37,5 +38,19 @@ class SettingsViewModel @Inject constructor(
     /** 在页面恢复时刷新权限状态。 */
     fun refreshPermissions() {
         permissionManager.refreshPermissionState()
+    }
+
+    /** 更新默认专注时长，由 SettingsScreen 点击调用。 */
+    fun updateDefaultFocusMinutes(minutes: Int) {
+        viewModelScope.launch {
+            settingsRepository.updateDefaultFocusMinutes(minutes)
+        }
+    }
+
+    /** 更新噪声阈值，由 SettingsScreen 点击调用。 */
+    fun updateNoiseThreshold(value: Float) {
+        viewModelScope.launch {
+            settingsRepository.updateNoiseThreshold(value)
+        }
     }
 }
