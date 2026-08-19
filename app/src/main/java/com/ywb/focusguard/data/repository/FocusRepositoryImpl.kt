@@ -60,6 +60,16 @@ class FocusRepositoryImpl @Inject constructor(
             entities.filter { it.endTime != null }.map { it.toDomain() }
         }
 
+    /** 按日期范围观察已完成会话，复用 DAO 的范围查询。 */
+    override fun observeSessionsInRange(startMillis: Long, endMillis: Long): Flow<List<FocusSession>> =
+        focusSessionDao.observeSessionsInRange(startMillis, endMillis).map { entities ->
+            entities.map { it.toDomain() }
+        }
+
+    /** 一次性获取日期范围内的会话。 */
+    override suspend fun getSessionsInRange(startMillis: Long, endMillis: Long): List<FocusSession> =
+        focusSessionDao.getSessionsInRange(startMillis, endMillis).map { it.toDomain() }
+
     /**
      * 观察会话详情：组合主记录和采样数据。
      *
