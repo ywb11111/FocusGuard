@@ -25,6 +25,35 @@ interface FocusSessionDao {
     @Query("SELECT * FROM focus_sessions WHERE id = :sessionId LIMIT 1")
     suspend fun getSession(sessionId: Long): FocusSessionEntity?
 
+    // ---- 按日期范围查询（用于周报/月报聚合） ----
+
+    /**
+     * 按日期范围观察已完成会话。
+     * startTime >= startMillis 且 startTime < endMillis，且 endTime 不为空（已完成）。
+     * 用于周报/月报页面持续监听指定时间段内的会话数据。
+     */
+    @Query(
+        """
+        SELECT * FROM focus_sessions
+        WHERE startTime >= :startMillis AND startTime < :endMillis AND endTime IS NOT NULL
+        ORDER BY startTime DESC
+        """
+    )
+    fun observeSessionsInRange(startMillis: Long, endMillis: Long): Flow<List<FocusSessionEntity>>
+
+    /**
+     * 一次性获取指定日期范围内的已完成会话。
+     * 用于需要一次性读取完整列表的场景（如导出、统计计算）。
+     */
+    @Query(
+        """
+        SELECT * FROM focus_sessions
+        WHERE startTime >= :startMillis AND startTime < :endMillis AND endTime IS NOT NULL
+        ORDER BY startTime DESC
+        """
+    )
+    suspend fun getSessionsInRange(startMillis: Long, endMillis: Long): List<FocusSessionEntity>
+
     // suspend 表示这是耗时数据库写入，应在协程中调用，避免阻塞主线程。
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSession(session: FocusSessionEntity): Long
