@@ -9,6 +9,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 /** 深色模式的核心语义色。 */
@@ -20,11 +21,15 @@ private val DarkColorScheme = darkColorScheme(
 
 /** 浅色模式的核心语义色，也是当前默认视觉方案。 */
 private val LightColorScheme = lightColorScheme(
-    primary = GuardTeal40,
-    secondary = GuardBlue40,
-    tertiary = GuardAmber40,
-    background = GuardBackground,
-    surface = GuardSurface
+    primary = MintPrimaryDark,
+    secondary = MintSecondary,
+    tertiary = MintAccent,
+    background = MintBackground,
+    surface = MintSurface,
+    error = MintWarning,
+    onPrimary = Color(0xFF065F46),
+    onSecondary = Color(0xFF1E3A5F),
+    onTertiary = Color(0xFF78350F)
 )
 
 /**

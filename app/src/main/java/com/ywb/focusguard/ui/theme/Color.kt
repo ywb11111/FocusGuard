@@ -17,3 +17,15 @@ val GuardBackground = Color(0xFFF7FAF9)
 
 /** 浅色主题基础表面颜色，用于卡片和内容容器。 */
 val GuardSurface = Color(0xFFFFFFFF)
+
+// ========== 原型设计配色方案 ==========
+// 薄荷绿主色 - 传递清新专注感
+val MintPrimary = Color(0xFF6EE7B7)      // 薄荷绿 - 主色
+val MintPrimaryDark = Color(0xFF34D399)  // 深薄荷
+val MintSecondary = Color(0xFF93C5FD)    // 天蓝
+val MintAccent = Color(0xFFFBBF24)       // 琥珀黄
+val MintWarning = Color(0xFFF87171)      // 珊瑚红
+
+// 原型设计背景和表面颜色
+val MintBackground = Color(0xFFF8FAFB)   // 米白背景
+val MintSurface = Color(0xFFFFFFFF)      // 白色表面

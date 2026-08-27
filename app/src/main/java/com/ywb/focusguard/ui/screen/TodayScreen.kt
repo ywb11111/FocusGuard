@@ -5,7 +5,9 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,12 +15,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -28,10 +35,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,6 +51,11 @@ import com.ywb.focusguard.domain.analyzer.EnvironmentAnalyzer
 import com.ywb.focusguard.ui.component.MetricCard
 import com.ywb.focusguard.ui.component.SectionHeader
 import com.ywb.focusguard.ui.state.TodayUiState
+import com.ywb.focusguard.ui.theme.MintAccent
+import com.ywb.focusguard.ui.theme.MintPrimary
+import com.ywb.focusguard.ui.theme.MintPrimaryDark
+import com.ywb.focusguard.ui.theme.MintSecondary
+import com.ywb.focusguard.ui.theme.MintWarning
 import com.ywb.focusguard.ui.viewmodel.TodayViewModel
 
 /**
@@ -115,100 +132,187 @@ fun TodayScreen(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column {
-                Text(
-                    text = "FocusGuard",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "专注环境助手",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(onClick = onOpenSettings) {
-                Icon(Icons.Outlined.Settings, contentDescription = "设置")
-            }
+        // 顶部问候语 - 原型设计风格
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "早上好",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "今天准备好专注了吗？",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
         }
 
+        // 环境状态卡片 - 原型设计风格
         val environment = uiState.environment
-        StatusCard(
-            title = environment?.let { EnvironmentAnalyzer().headline(it) } ?: "正在读取环境",
-            subtitle = "光照、噪声和移动均来自手机传感器，实时环境监测中。"
-        )
-
-        SectionHeader(title = "实时指标")
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            MetricCard(
+            // 噪声卡片
+            EnvCard(
+                icon = "🔊",
                 label = "噪声",
                 value = "${environment?.noise?.decibel?.toInt() ?: "--"} dB",
+                status = getNoiseStatus(environment?.noise?.decibel?.toInt()),
                 modifier = Modifier.weight(1f)
             )
-            MetricCard(
+
+            // 光照卡片
+            EnvCard(
+                icon = "💡",
                 label = "光照",
                 value = "${environment?.light?.lux?.toInt() ?: "--"} lux",
+                status = getLightStatus(environment?.light?.lux?.toInt()),
                 modifier = Modifier.weight(1f)
             )
-            MetricCard(
+
+            // 移动卡片
+            EnvCard(
+                icon = "📱",
                 label = "移动",
                 value = if (environment?.motion?.isMoving == true) "活动" else "稳定",
+                status = if (environment?.motion?.isMoving == true) "warning" else "good",
                 modifier = Modifier.weight(1f)
             )
         }
 
-        SectionHeader(title = "今日概览")
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth()
+        // 开始专注按钮 - 原型设计风格（渐变背景）
+        Button(
+            onClick = onStartFocus,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(80.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.Transparent
+            ),
+            contentPadding = ButtonDefaults.TextButtonContentPadding
         ) {
-            val summary = uiState.todaySummary
-            MetricCard(
-                label = "专注",
-                value = formatDuration(summary?.totalFocusMillis ?: 0L),
-                modifier = Modifier.weight(1f)
-            )
-            MetricCard(
-                label = "评分",
-                value = "${summary?.averageScore ?: 0}",
-                modifier = Modifier.weight(1f)
-            )
-            MetricCard(
-                label = "分心",
-                value = "${summary?.distractionCount ?: 0} 次",
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        SectionHeader(title = "最近记录")
-        val latest = uiState.latestSession
-        Card(
-            onClick = { latest?.let { onOpenSessionDetail(it.id) } },
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(MintPrimary, MintPrimaryDark)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = latest?.note ?: "还没有专注记录",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Outlined.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = Color(0xFF065F46)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "开始专注",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF065F46)
+                        )
+                        Text(
+                            text = "环境适合专注，现在开始吧",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF047857)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 今日概览 - 原型设计风格
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "今日概览",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val summary = uiState.todaySummary
+                MetricCard(
+                    label = "专注时长",
+                    value = formatDuration(summary?.totalFocusMillis ?: 0L),
+                    modifier = Modifier.weight(1f)
                 )
-                Text(
-                    text = latest?.let { "${formatDuration(it.durationMillis)} · 评分 ${it.score}" }
-                        ?: "完成一次专注后，这里会显示最近结果。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                MetricCard(
+                    label = "平均评分",
+                    value = "${summary?.averageScore ?: 0}",
+                    modifier = Modifier.weight(1f)
                 )
+                MetricCard(
+                    label = "专注次数",
+                    value = "${summary?.distractionCount ?: 0}",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        // 最近记录 - 原型设计风格
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "最近记录",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+            val latest = uiState.latestSession
+            Card(
+                onClick = { latest?.let { onOpenSessionDetail(it.id) } },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = latest?.note ?: "还没有专注记录",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = latest?.let { "${formatDuration(it.durationMillis)} · 环境良好" }
+                                ?: "完成一次专注后，这里会显示最近结果。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (latest != null) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MintPrimary)
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "评分 ${latest.score}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF065F46)
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -277,14 +381,6 @@ fun TodayScreen(
             }
             Spacer(Modifier.height(8.dp))
         }
-
-        Button(
-            onClick = onStartFocus,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Outlined.PlayArrow, contentDescription = null)
-            Text(text = "开始专注", modifier = Modifier.padding(start = 8.dp))
-        }
     }
 }
 
@@ -312,6 +408,85 @@ private fun StatusCard(
             )
             Text(text = subtitle, style = MaterialTheme.typography.bodyMedium)
         }
+    }
+}
+
+/**
+ * 环境指标卡片 - 原型设计风格
+ * 显示图标、标签、数值和状态指示
+ */
+@Composable
+private fun EnvCard(
+    icon: String,
+    label: String,
+    value: String,
+    status: String,
+    modifier: Modifier = Modifier
+) {
+    val statusColor = when (status) {
+        "good" -> MintPrimaryDark
+        "normal" -> MintAccent
+        "warning" -> MintWarning
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    val statusText = when (status) {
+        "good" -> "✓ 适中"
+        "normal" -> "○ 一般"
+        "warning" -> "⚠ 偏高"
+        else -> ""
+    }
+
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = icon,
+                fontSize = 20.sp
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.labelSmall,
+                color = statusColor,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+/** 根据噪声分贝值返回状态：good/normal/warning */
+private fun getNoiseStatus(decibel: Int?): String {
+    return when {
+        decibel == null -> "normal"
+        decibel < 50 -> "good"
+        decibel < 65 -> "normal"
+        else -> "warning"
+    }
+}
+
+/** 根据光照值返回状态：good/normal/warning */
+private fun getLightStatus(lux: Int?): String {
+    return when {
+        lux == null -> "normal"
+        lux in 100..500 -> "good"
+        lux in 50..99 || lux in 501..700 -> "normal"
+        else -> "warning"
     }
 }
 
