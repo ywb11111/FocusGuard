@@ -22,6 +22,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -31,6 +34,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ywb.focusguard.ui.component.SectionHeader
 import com.ywb.focusguard.ui.state.SettingsUiState
 import com.ywb.focusguard.ui.viewmodel.SettingsViewModel
+
+/** 主题模式枚举 */
+enum class ThemeMode {
+    SYSTEM,
+    LIGHT,
+    DARK
+}
 
 /** 设置页路由层：收集设置状态并转发权限说明导航事件。 */
 @Composable
@@ -92,6 +102,9 @@ fun SettingsScreen(
     onUpdateDefaultFocusMinutes: (Int) -> Unit = {},
     onUpdateNoiseThreshold: (Float) -> Unit = {}
 ) {
+    // 主题模式状态
+    var themeMode by remember { mutableStateOf(ThemeMode.SYSTEM) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -102,8 +115,57 @@ fun SettingsScreen(
         Text(
             text = "设置",
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.Bold
         )
+
+        // 主题设置 - 深色模式支持
+        SectionHeader(title = "主题设置")
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "外观模式",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    ThemeMode.entries.forEach { mode ->
+                        val isSelected = themeMode == mode
+                        val label = when (mode) {
+                            ThemeMode.SYSTEM -> "跟随系统"
+                            ThemeMode.LIGHT -> "浅色"
+                            ThemeMode.DARK -> "深色"
+                        }
+
+                        Card(
+                            onClick = { themeMode = mode },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = label,
+                                modifier = Modifier.padding(12.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         SectionHeader(title = "专注偏好")
         SettingRow("默认时长", "${uiState.settings.defaultFocusMinutes} 分钟") {

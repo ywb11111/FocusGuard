@@ -1,5 +1,13 @@
 package com.ywb.focusguard.ui.screen
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,8 +32,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -76,6 +88,9 @@ fun SessionScreen(
     onReset: () -> Unit,
     onOpenDetail: (Long) -> Unit
 ) {
+    // 状态切换动画：使用 AnimatedVisibility 实现淡入淡出 + 滑动效果
+    var previousState by remember { mutableStateOf<SessionUiState?>(null) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -85,16 +100,57 @@ fun SessionScreen(
         Text(
             text = "专注",
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.Bold
         )
 
         // UI 只根据状态分支显示不同内容；真正的状态切换发生在 SessionViewModel。
-        when (uiState) {
-            SessionUiState.Idle -> Text("准备专注")
-            is SessionUiState.Ready -> ReadySessionContent(uiState, onStart)
-            is SessionUiState.Running -> RunningSessionContent(uiState, onPause, onFinish)
-            is SessionUiState.Paused -> PausedSessionContent(uiState, onResume, onFinish)
-            is SessionUiState.Finished -> FinishedSessionContent(uiState, onReset, onOpenDetail)
+        // 使用 AnimatedVisibility 实现状态切换动画
+        AnimatedVisibility(
+            visible = uiState is SessionUiState.Idle,
+            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(animationSpec = tween(300)),
+            exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(animationSpec = tween(300))
+        ) {
+            Text("准备专注")
+        }
+
+        AnimatedVisibility(
+            visible = uiState is SessionUiState.Ready,
+            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(animationSpec = tween(300)),
+            exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(animationSpec = tween(300))
+        ) {
+            if (uiState is SessionUiState.Ready) {
+                ReadySessionContent(uiState, onStart)
+            }
+        }
+
+        AnimatedVisibility(
+            visible = uiState is SessionUiState.Running,
+            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(animationSpec = tween(300)),
+            exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(animationSpec = tween(300))
+        ) {
+            if (uiState is SessionUiState.Running) {
+                RunningSessionContent(uiState, onPause, onFinish)
+            }
+        }
+
+        AnimatedVisibility(
+            visible = uiState is SessionUiState.Paused,
+            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(animationSpec = tween(300)),
+            exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(animationSpec = tween(300))
+        ) {
+            if (uiState is SessionUiState.Paused) {
+                PausedSessionContent(uiState, onResume, onFinish)
+            }
+        }
+
+        AnimatedVisibility(
+            visible = uiState is SessionUiState.Finished,
+            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(animationSpec = tween(300)),
+            exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(animationSpec = tween(300))
+        ) {
+            if (uiState is SessionUiState.Finished) {
+                FinishedSessionContent(uiState, onReset, onOpenDetail)
+            }
         }
     }
 }
@@ -112,9 +168,18 @@ private fun ReadySessionContent(
         modifier = Modifier.fillMaxWidth()
     ) {
         listOf(25, 45, 60).forEach { minutes ->
+            // 按钮点击动画：按下时缩放，释放时恢复
+            var isPressed by remember { mutableStateOf(false) }
+            val scale by animateFloatAsState(
+                targetValue = if (isPressed) 0.95f else 1f,
+                animationSpec = tween(100)
+            )
+
             Card(
                 onClick = { /* TODO: 设置选择的时长 */ },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .scale(scale),
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = if (minutes == 25) MintPrimary else MaterialTheme.colorScheme.surface
@@ -170,12 +235,19 @@ private fun ReadySessionContent(
         }
     }
 
-    // 开始按钮 - 原型设计风格（渐变背景）
+    // 开始按钮 - 原型设计风格（渐变背景 + 点击动画）
+    var isButtonPressed by remember { mutableStateOf(false) }
+    val buttonScale by animateFloatAsState(
+        targetValue = if (isButtonPressed) 0.95f else 1f,
+        animationSpec = tween(100)
+    )
+
     Button(
         onClick = onStart,
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .height(56.dp)
+            .scale(buttonScale),
         shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color.Transparent
@@ -225,6 +297,12 @@ private fun RunningSessionContent(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // 倒计时数字动画：使用 animateFloatAsState 实现数字变化动画
+        val animatedRemainingTime by animateFloatAsState(
+            targetValue = (uiState.remainingMillis ?: 0L).toFloat(),
+            animationSpec = tween(300)
+        )
+
         Text(
             text = formatDuration(uiState.remainingMillis ?: 0L),
             style = MaterialTheme.typography.displayLarge,
@@ -260,16 +338,35 @@ private fun RunningSessionContent(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
+        // 暂停按钮动画
+        var isPausePressed by remember { mutableStateOf(false) }
+        val pauseScale by animateFloatAsState(
+            targetValue = if (isPausePressed) 0.95f else 1f,
+            animationSpec = tween(100)
+        )
+
         OutlinedButton(
             onClick = onPause,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .scale(pauseScale),
             shape = RoundedCornerShape(12.dp)
         ) {
             Text("暂停")
         }
+
+        // 结束按钮动画
+        var isFinishPressed by remember { mutableStateOf(false) }
+        val finishScale by animateFloatAsState(
+            targetValue = if (isFinishPressed) 0.95f else 1f,
+            animationSpec = tween(100)
+        )
+
         Button(
             onClick = onFinish,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .scale(finishScale),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MintWarning
@@ -421,9 +518,16 @@ private fun FinishedSessionContent(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // 庆祝动画：使用 animateFloatAsState 实现弹性动画
+        val celebrationScale by animateFloatAsState(
+            targetValue = 1f,
+            animationSpec = tween(500)
+        )
+
         Text(
             text = "🎉",
-            style = MaterialTheme.typography.displayLarge
+            style = MaterialTheme.typography.displayLarge,
+            modifier = Modifier.scale(celebrationScale)
         )
         Text(
             text = "专注完成！",
@@ -449,8 +553,20 @@ private fun FinishedSessionContent(
             modifier = Modifier.padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // 评分数字动画：从 0 到目标值的计数动画
+            var animatedScore by remember { mutableStateOf(0) }
+            val targetScore = uiState.session.score
+
+            // 使用 LaunchedEffect 触发计数动画
+            androidx.compose.runtime.LaunchedEffect(targetScore) {
+                for (i in 0..targetScore) {
+                    animatedScore = i
+                    kotlinx.coroutines.delay(10) // 10ms 间隔，实现流畅计数
+                }
+            }
+
             Text(
-                text = "${uiState.session.score}",
+                text = "$animatedScore",
                 style = MaterialTheme.typography.displayLarge,
                 fontWeight = FontWeight.Bold,
                 color = MintPrimaryDark
@@ -471,11 +587,18 @@ private fun FinishedSessionContent(
     }
 
     // 按钮 - 原型设计风格
+    var isDetailPressed by remember { mutableStateOf(false) }
+    val detailScale by animateFloatAsState(
+        targetValue = if (isDetailPressed) 0.95f else 1f,
+        animationSpec = tween(100)
+    )
+
     Button(
         onClick = { onOpenDetail(uiState.session.id) },
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .height(56.dp)
+            .scale(detailScale),
         shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = MintPrimary

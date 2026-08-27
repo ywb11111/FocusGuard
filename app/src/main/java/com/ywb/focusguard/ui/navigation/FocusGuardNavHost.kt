@@ -1,6 +1,9 @@
 package com.ywb.focusguard.ui.navigation
 
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
@@ -33,20 +36,38 @@ fun FocusGuardNavHost(
     NavHost(
         navController = navController,
         startDestination = Destination.Today.route,
-        modifier = modifier
+        modifier = modifier,
+        enterTransition = {
+            // 页面进入动画：从右侧滑入 + 淡入，持续 300ms
+            slideIntoContainer(
+                AnimatedContentTransitionScope.SlideDirection.Left,
+                animationSpec = tween(300)
+            ) + fadeIn(animationSpec = tween(300))
+        },
+        exitTransition = {
+            // 页面退出动画：向左滑出 + 淡出，持续 300ms
+            slideOutOfContainer(
+                AnimatedContentTransitionScope.SlideDirection.Left,
+                animationSpec = tween(300)
+            ) + fadeOut(animationSpec = tween(300))
+        },
+        popEnterTransition = {
+            // 返回时页面进入动画：从左侧滑入 + 淡入，持续 300ms
+            slideIntoContainer(
+                AnimatedContentTransitionScope.SlideDirection.Right,
+                animationSpec = tween(300)
+            ) + fadeIn(animationSpec = tween(300))
+        },
+        popExitTransition = {
+            // 返回时页面退出动画：向右滑出 + 淡出，持续 300ms
+            slideOutOfContainer(
+                AnimatedContentTransitionScope.SlideDirection.Right,
+                animationSpec = tween(300)
+            ) + fadeOut(animationSpec = tween(300))
+        }
     ) {
         composable(
-            route = Destination.Today.route,
-            enterTransition = {
-                slideIntoContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Left
-                )
-            },
-            exitTransition = {
-                slideOutOfContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Left
-                )
-            }
+            route = Destination.Today.route
         ) {
             TodayRoute(
                 onStartFocus = onStartFocus,
@@ -57,33 +78,15 @@ fun FocusGuardNavHost(
             )
         }
         composable(
-            route = Destination.Session.route,
-            enterTransition = {
-                slideIntoContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Left
-                )
-            },
-            exitTransition = {
-                slideOutOfContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Left
-                )
-            }) {
+            route = Destination.Session.route
+        ) {
             SessionRoute(
                 onFinish = { id -> navController.navigate(Destination.SessionDetail.createRoute(id)) }
             )
         }
         composable(
-            route = Destination.Reports.route,
-            enterTransition = {
-                slideIntoContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Left
-                )
-            },
-            exitTransition = {
-                slideOutOfContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Left
-                )
-            }) {
+            route = Destination.Reports.route
+        ) {
             ReportsRoute(
                 onOpenSessionDetail = { id ->
                     navController.navigate(Destination.SessionDetail.createRoute(id))
@@ -91,17 +94,8 @@ fun FocusGuardNavHost(
             )
         }
         composable(
-            route = Destination.Settings.route,
-            enterTransition = {
-                slideIntoContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Left
-                )
-            },
-            exitTransition = {
-                slideOutOfContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Left
-                )
-            }) {
+            route = Destination.Settings.route
+        ) {
             SettingsRoute(
                 onOpenPermissionGuide = { navController.navigate(Destination.PermissionGuide.route) }
             )

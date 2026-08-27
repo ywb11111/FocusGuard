@@ -12,11 +12,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-/** 深色模式的核心语义色。 */
+/** 深色模式的核心语义色，使用完整的深色配色方案。 */
 private val DarkColorScheme = darkColorScheme(
-    primary = GuardTeal80,
-    secondary = GuardBlue80,
-    tertiary = GuardAmber80
+    primary = DarkMintPrimary,
+    secondary = DarkMintSecondary,
+    tertiary = DarkMintAccent,
+    background = DarkBackground,
+    surface = DarkSurface,
+    surfaceVariant = DarkSurfaceVariant,
+    error = DarkMintWarning,
+    onPrimary = Color(0xFF065F46),
+    onSecondary = Color(0xFF1E3A5F),
+    onTertiary = Color(0xFF78350F),
+    onBackground = Color(0xFFF9FAFB),
+    onSurface = Color(0xFFF9FAFB),
+    onSurfaceVariant = Color(0xFFD1D5DB)
 )
 
 /** 浅色模式的核心语义色，也是当前默认视觉方案。 */

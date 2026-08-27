@@ -29,3 +29,16 @@ val MintWarning = Color(0xFFF87171)      // 珊瑚红
 // 原型设计背景和表面颜色
 val MintBackground = Color(0xFFF8FAFB)   // 米白背景
 val MintSurface = Color(0xFFFFFFFF)      // 白色表面
+
+// ========== 深色模式配色方案 ==========
+// 深色模式主色 - 保持品牌一致性
+val DarkMintPrimary = Color(0xFF34D399)      // 深色模式薄荷绿
+val DarkMintPrimaryDark = Color(0xFF6EE7B7)  // 深色模式深薄荷
+val DarkMintSecondary = Color(0xFF60A5FA)    // 深色模式天蓝
+val DarkMintAccent = Color(0xFFFBBF24)       // 深色模式琥珀黄
+val DarkMintWarning = Color(0xFFF87171)      // 深色模式珊瑚红
+
+// 深色模式背景和表面颜色
+val DarkBackground = Color(0xFF111827)   // 深色背景
+val DarkSurface = Color(0xFF1F2937)      // 深色表面
+val DarkSurfaceVariant = Color(0xFF374151) // 深色表面变体
