@@ -101,7 +101,7 @@ fun FocusGuardNavHost(
             )
         }
         composable(Destination.PermissionGuide.route) {
-            PermissionGuideScreen()
+            PermissionGuideScreen(onBack = { navController.popBackStack() })
         }
         composable(Destination.Onboarding.route) {
             OnboardingScreen()
@@ -113,7 +113,7 @@ fun FocusGuardNavHost(
                 type = NavType.LongType
             })
         ) {
-            SessionDetailRoute()
+            SessionDetailRoute(onBack = { navController.popBackStack() })
         }
     }
 }

@@ -22,6 +22,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 /**
  * 专注期间的前台服务，保证 App 切后台后传感器继续采集。
@@ -122,11 +123,17 @@ class FocusMonitorService : Service() {
 
         // 启动前台服务
         val notification = buildNotification("专注进行中", formatTime(remainingMillis))
+        // API 30 之前没有前台服务类型参数；传 0 由 ServiceCompat 按旧系统方式处理。
+        val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        } else {
+            0
+        }
         ServiceCompat.startForeground(
             this,
             NOTIFICATION_ID,
             notification,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            serviceType
         )
 
         // 启动内部计时
@@ -209,7 +216,7 @@ class FocusMonitorService : Service() {
         val totalSeconds = millis / 1000
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60
-        return String.format("剩余 %02d:%02d", minutes, seconds)
+        return String.format(Locale.getDefault(), "剩余 %02d:%02d", minutes, seconds)
     }
 
     private fun createNotificationChannel() {

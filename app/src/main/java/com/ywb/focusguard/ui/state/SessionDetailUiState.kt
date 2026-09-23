@@ -39,7 +39,11 @@ sealed interface SessionDetailUiState {
         val noiseValues: List<Float>,
         val lightValues: List<Float>,
         val motionCount: Int,
-        val suggestionText: String
+        val suggestionText: String,
+        val startedAt: Long = 0L,
+        val averageNoiseText: String = "-- dB",
+        val averageLightText: String = "-- lux",
+        val distractionCount: Int = 0
     ) : SessionDetailUiState
 }
 
@@ -53,5 +57,9 @@ fun SessionDetail.toUiState(): SessionDetailUiState.Content = SessionDetailUiSta
     noiseValues = noiseSamples.map { it.decibel },
     lightValues = lightSamples.map { it.lux },
     motionCount = motionEvents.size,
-    suggestionText = score.suggestions.firstOrNull() ?: "本次专注记录已保存，后续接入采样后会给出更具体的建议。"
+    suggestionText = score.suggestions.firstOrNull() ?: "本次专注记录已保存，当前没有需要特别调整的环境因素。",
+    startedAt = session.startTime,
+    averageNoiseText = "${session.averageNoiseDb.toInt()} dB",
+    averageLightText = "${session.averageLightLux.toInt()} lux",
+    distractionCount = session.distractionCount
 )

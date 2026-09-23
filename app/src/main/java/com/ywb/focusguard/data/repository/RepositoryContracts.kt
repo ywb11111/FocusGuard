@@ -79,4 +79,13 @@ interface SettingsRepository {
 
     /** 更新默认专注时长，单位分钟。 */
     suspend fun updateDefaultFocusMinutes(minutes: Int)
+
+    /** 更新专注期间是否启用前台后台监测。 */
+    suspend fun updateBackgroundMonitoringEnabled(enabled: Boolean)
+
+    /** 更新是否允许生成每日总结。 */
+    suspend fun updateDailyReportEnabled(enabled: Boolean)
+
+    /** 标记首次引导已经完成。 */
+    suspend fun completeOnboarding()
 }

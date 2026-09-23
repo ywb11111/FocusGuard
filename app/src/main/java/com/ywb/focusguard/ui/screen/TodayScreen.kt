@@ -1,16 +1,10 @@
 package com.ywb.focusguard.ui.screen
 
 import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,56 +12,53 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Analytics
+import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.TrackChanges
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ywb.focusguard.domain.analyzer.EnvironmentAnalyzer
-import com.ywb.focusguard.ui.component.MetricCard
+import com.ywb.focusguard.domain.model.EnvironmentSnapshot
+import com.ywb.focusguard.domain.model.EnvironmentStatus
+import com.ywb.focusguard.domain.model.LightLevel
+import com.ywb.focusguard.domain.model.NoiseLevel
+import com.ywb.focusguard.ui.component.EnvironmentMetricRow
+import com.ywb.focusguard.ui.component.EnvironmentScoreGauge
+import com.ywb.focusguard.ui.component.FocusDivider
+import com.ywb.focusguard.ui.component.FocusPageHeader
+import com.ywb.focusguard.ui.component.FocusStat
 import com.ywb.focusguard.ui.component.SectionHeader
 import com.ywb.focusguard.ui.state.TodayUiState
-import com.ywb.focusguard.ui.theme.MintAccent
-import com.ywb.focusguard.ui.theme.MintPrimary
-import com.ywb.focusguard.ui.theme.MintPrimaryDark
-import com.ywb.focusguard.ui.theme.MintSecondary
-import com.ywb.focusguard.ui.theme.MintWarning
 import com.ywb.focusguard.ui.viewmodel.TodayViewModel
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
-/**
- * 今日页路由层：从 Hilt 获取 ViewModel、按生命周期收集状态，并把导航事件传给纯 UI。
- */
+/** 今日页路由层：处理权限结果与生命周期，纯页面只接收可渲染状态。 */
 @Composable
 fun TodayRoute(
     onStartFocus: () -> Unit,
@@ -76,35 +67,21 @@ fun TodayRoute(
     viewModel: TodayViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-
-    // 录音权限请求启动器
     val audioPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        viewModel.refreshPermissions()
-    }
-
-    // 通知权限请求启动器（Android 13+）
+        ActivityResultContracts.RequestPermission()
+    ) { viewModel.refreshPermissions() }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        viewModel.refreshPermissions()
-    }
+        ActivityResultContracts.RequestPermission()
+    ) { viewModel.refreshPermissions() }
 
-    // 页面进入时检查权限状态
-    LaunchedEffect(Unit) {
-        viewModel.refreshPermissions()
-    }
+    LaunchedEffect(Unit) { viewModel.refreshPermissions() }
 
     TodayScreen(
         uiState = uiState,
         onStartFocus = onStartFocus,
         onOpenSettings = onOpenSettings,
         onOpenSessionDetail = onOpenSessionDetail,
-        onRequestAudioPermission = {
-            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        },
+        onRequestAudioPermission = { audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
         onRequestNotificationPermission = {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -114,14 +91,9 @@ fun TodayRoute(
 }
 
 /**
- * 今日页纯 UI，只依赖 [TodayUiState] 和事件回调，因此可独立预览和测试。
+ * FocusGuard 的主任务入口。
  *
- * @param uiState 当前可渲染状态。
- * @param onStartFocus 进入专注页。
- * @param onOpenSettings 打开设置页。
- * @param onOpenSessionDetail 按真实会话 id 打开详情页。
- * @param onRequestAudioPermission 请求录音权限。
- * @param onRequestNotificationPermission 请求通知权限（Android 13+）。
+ * 信息层级严格遵循：环境结论 → 开始行动 → 诊断依据 → 今日统计 → 最近记录。
  */
 @Composable
 fun TodayScreen(
@@ -132,382 +104,294 @@ fun TodayScreen(
     onRequestAudioPermission: () -> Unit = {},
     onRequestNotificationPermission: () -> Unit = {}
 ) {
+    val environment = uiState.environment
+    val analyzer = EnvironmentAnalyzer()
+    val score = environment?.let(analyzer::readinessScore) ?: 0
+    val headline = environment?.let(analyzer::headline) ?: "正在读取环境"
+    val guidance = environment?.let(analyzer::guidance) ?: "请稍候，传感器正在准备。"
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp)
     ) {
-        // 顶部问候语 - 原型设计风格
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = "早上好",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "今天准备好专注了吗？",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        // 环境状态卡片 - 原型设计风格
-        val environment = uiState.environment
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // 噪声卡片
-            EnvCard(
-                icon = "🔊",
-                label = "噪声",
-                value = "${environment?.noise?.decibel?.toInt() ?: "--"} dB",
-                status = getNoiseStatus(environment?.noise?.decibel?.toInt()),
-                modifier = Modifier.weight(1f)
-            )
-
-            // 光照卡片
-            EnvCard(
-                icon = "💡",
-                label = "光照",
-                value = "${environment?.light?.lux?.toInt() ?: "--"} lux",
-                status = getLightStatus(environment?.light?.lux?.toInt()),
-                modifier = Modifier.weight(1f)
-            )
-
-            // 移动卡片
-            EnvCard(
-                icon = "📱",
-                label = "移动",
-                value = if (environment?.motion?.isMoving == true) "活动" else "稳定",
-                status = if (environment?.motion?.isMoving == true) "warning" else "good",
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        // 开始专注按钮 - 原型设计风格（渐变背景 + 点击动画）
-        var isButtonPressed by remember { mutableStateOf(false) }
-        val buttonScale by animateFloatAsState(
-            targetValue = if (isButtonPressed) 0.95f else 1f,
-            animationSpec = tween(100)
+        FocusPageHeader(
+            title = "今日",
+            subtitle = todayDateText(),
+            trailing = {
+                Text(
+                    text = greetingText(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            EnvironmentScoreGauge(score = score, size = 146.dp)
+            Spacer(Modifier.width(18.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = headline, style = MaterialTheme.typography.headlineMedium)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = guidance,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
 
         Button(
             onClick = onStartFocus,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(80.dp)
-                .scale(buttonScale),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color.Transparent
-            ),
-            contentPadding = ButtonDefaults.TextButtonContentPadding
+                .height(58.dp),
+            shape = RoundedCornerShape(14.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(MintPrimary, MintPrimaryDark)
-                        ),
-                        shape = RoundedCornerShape(16.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        Icons.Outlined.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(32.dp),
-                        tint = Color(0xFF065F46)
+            Icon(Icons.Outlined.PlayArrow, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("开始专注", style = MaterialTheme.typography.titleMedium)
+        }
+
+        Column {
+            SectionHeader(
+                title = "环境监测",
+                action = {
+                    Text(
+                        "实时状态",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "开始专注",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF065F46)
-                        )
-                        Text(
-                            text = "环境适合专注，现在开始吧",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFF047857)
-                        )
-                    }
+                }
+            )
+            Spacer(Modifier.height(8.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    NoiseMetric(environment)
+                    FocusDivider()
+                    LightMetric(environment)
+                    FocusDivider()
+                    MotionMetric(environment)
                 }
             }
         }
 
-        // 今日概览 - 原型设计风格
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = "今日概览",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(bottom = 12.dp)
+        if (!uiState.permissionState.audioGranted || !uiState.permissionState.notificationGranted) {
+            PermissionReminder(
+                audioGranted = uiState.permissionState.audioGranted,
+                notificationGranted = uiState.permissionState.notificationGranted,
+                onRequestAudioPermission = onRequestAudioPermission,
+                onRequestNotificationPermission = onRequestNotificationPermission,
+                onOpenSettings = onOpenSettings
             )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+        }
+
+        Column {
+            SectionHeader(
+                title = "今天",
+                action = {
+                    Text(
+                        "每一次专注都算数",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            )
+            Spacer(Modifier.height(16.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
                 val summary = uiState.todaySummary
-                MetricCard(
+                FocusStat(
+                    value = formatDurationCompact(summary?.totalFocusMillis ?: 0L),
                     label = "专注时长",
-                    value = formatDuration(summary?.totalFocusMillis ?: 0L),
                     modifier = Modifier.weight(1f)
                 )
-                MetricCard(
-                    label = "平均评分",
-                    value = "${summary?.averageScore ?: 0}",
-                    modifier = Modifier.weight(1f)
-                )
-                MetricCard(
+                FocusStat(
+                    value = "${summary?.sessionCount ?: 0} 次",
                     label = "专注次数",
-                    value = "${summary?.distractionCount ?: 0}",
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Outlined.TrackChanges,
+                    tint = MaterialTheme.colorScheme.secondary
+                )
+                FocusStat(
+                    value = "${summary?.averageScore ?: 0}",
+                    label = "平均评分",
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Outlined.Analytics
                 )
             }
         }
 
-        // 最近记录 - 原型设计风格
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = "最近记录",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
-            val latest = uiState.latestSession
-            Card(
-                onClick = { latest?.let { onOpenSessionDetail(it.id) } },
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+        uiState.latestSession?.let { latest ->
+            Column {
+                SectionHeader(title = "最近一次")
+                Spacer(Modifier.height(10.dp))
+                Card(
+                    onClick = { onOpenSessionDetail(latest.id) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
-                    Column {
-                        Text(
-                            text = latest?.note ?: "还没有专注记录",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = latest?.let { "${formatDuration(it.durationMillis)} · 环境良好" }
-                                ?: "完成一次专注后，这里会显示最近结果。",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (latest != null) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MintPrimary)
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "评分 ${latest.score}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF065F46)
+                                text = latest.note?.takeIf { it.isNotBlank() } ?: "专注已完成",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "${formatDuration(latest.durationMillis)} · ${sessionTimeText(latest.startTime)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        Text(
+                            text = latest.score.toString(),
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
         }
 
-        // 录音权限缺失提示
-        if (!uiState.permissionState.audioGranted) {
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "需要录音权限",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "噪声检测需要录音权限来分析环境声音，不会保存原始音频。",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Button(
-                        onClick = onRequestAudioPermission,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("授权录音权限")
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
+        uiState.errorMessage?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
-
-        // 通知权限缺失提示（Android 13+ 需要）
-        if (!uiState.permissionState.notificationGranted) {
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "需要通知权限",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "专注期间需要通知权限才能在前台服务中显示剩余时间和控制按钮。",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Button(
-                        onClick = onRequestNotificationPermission,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("授权通知权限")
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-        }
+        Spacer(Modifier.height(4.dp))
     }
 }
 
-/** 首页顶部的整体环境结论卡片。 */
 @Composable
-private fun StatusCard(
-    title: String,
-    subtitle: String
-) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-        ),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(text = subtitle, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
+private fun NoiseMetric(environment: EnvironmentSnapshot?) {
+    val level = environment?.noise?.level
+    val healthy = level == NoiseLevel.QUIET || level == NoiseLevel.NORMAL
+    EnvironmentMetricRow(
+        icon = Icons.Outlined.GraphicEq,
+        label = "噪声",
+        value = environment?.let { "${it.noise.decibel.toInt()} dB" } ?: "-- dB",
+        status = when (level) {
+            NoiseLevel.QUIET -> "安静"
+            NoiseLevel.NORMAL -> "适中"
+            NoiseLevel.NOISY -> "偏吵"
+            NoiseLevel.LOUD -> "嘈杂"
+            null -> "检测中"
+        },
+        detail = if (healthy) "处于舒适范围" else if (level == null) "等待麦克风数据" else "建议降低环境噪声",
+        healthy = healthy
+    )
 }
 
-/**
- * 环境指标卡片 - 原型设计风格
- * 显示图标、标签、数值和状态指示
- */
 @Composable
-private fun EnvCard(
-    icon: String,
-    label: String,
-    value: String,
-    status: String,
-    modifier: Modifier = Modifier
+private fun LightMetric(environment: EnvironmentSnapshot?) {
+    val level = environment?.light?.level
+    val healthy = level == LightLevel.COMFORTABLE
+    EnvironmentMetricRow(
+        icon = Icons.Outlined.LightMode,
+        label = "光照",
+        value = environment?.let { "${it.light.lux.toInt()} lux" } ?: "-- lux",
+        status = when (level) {
+            LightLevel.COMFORTABLE -> "适宜"
+            LightLevel.DARK -> "过暗"
+            LightLevel.DIM -> "偏暗"
+            LightLevel.BRIGHT -> "偏亮"
+            null -> "检测中"
+        },
+        detail = if (healthy) "光线充足且柔和" else if (level == null) "等待光照传感器" else "调整光源会更舒适",
+        healthy = healthy
+    )
+}
+
+@Composable
+private fun MotionMetric(environment: EnvironmentSnapshot?) {
+    val available = environment != null
+    val healthy = available && environment?.motion?.isMoving == false
+    EnvironmentMetricRow(
+        icon = Icons.Outlined.PhoneAndroid,
+        label = "手机",
+        value = when {
+            !available -> "--"
+            environment?.motion?.isMoving == true -> "移动中"
+            else -> "稳定"
+        },
+        status = when {
+            !available -> "检测中"
+            healthy -> "稳定"
+            else -> "移动"
+        },
+        detail = when {
+            !available -> "等待移动传感器"
+            healthy -> "未检测到明显移动"
+            else -> "放稳手机更易专注"
+        },
+        healthy = healthy
+    )
+}
+
+@Composable
+private fun PermissionReminder(
+    audioGranted: Boolean,
+    notificationGranted: Boolean,
+    onRequestAudioPermission: () -> Unit,
+    onRequestNotificationPermission: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
-    val statusColor = when (status) {
-        "good" -> MintPrimaryDark
-        "normal" -> MintAccent
-        "warning" -> MintWarning
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    val statusText = when (status) {
-        "good" -> "✓ 适中"
-        "normal" -> "○ 一般"
-        "warning" -> "⚠ 偏高"
-        else -> ""
-    }
-
     Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("完成监测设置", style = MaterialTheme.typography.titleMedium)
             Text(
-                text = icon,
-                fontSize = 20.sp
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
+                "麦克风只计算相对音量，不保存录音；通知用于后台显示计时状态。",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = statusText,
-                style = MaterialTheme.typography.labelSmall,
-                color = statusColor,
-                fontWeight = FontWeight.Medium
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (!audioGranted) TextButton(onClick = onRequestAudioPermission) { Text("允许噪声检测") }
+                if (!notificationGranted) TextButton(onClick = onRequestNotificationPermission) { Text("允许通知") }
+                TextButton(onClick = onOpenSettings) { Text("了解更多") }
+            }
         }
     }
 }
 
-/** 根据噪声分贝值返回状态：good/normal/warning */
-private fun getNoiseStatus(decibel: Int?): String {
-    return when {
-        decibel == null -> "normal"
-        decibel < 50 -> "good"
-        decibel < 65 -> "normal"
-        else -> "warning"
-    }
+private fun greetingText(): String = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
+    in 5..10 -> "早上好"
+    in 11..13 -> "中午好"
+    in 14..17 -> "下午好"
+    else -> "晚上好"
 }
 
-/** 根据光照值返回状态：good/normal/warning */
-private fun getLightStatus(lux: Int?): String {
-    return when {
-        lux == null -> "normal"
-        lux in 100..500 -> "good"
-        lux in 50..99 || lux in 501..700 -> "normal"
-        else -> "warning"
-    }
+private fun todayDateText(): String = SimpleDateFormat("M月d日 EEEE", Locale.CHINA).format(Date())
+
+private fun sessionTimeText(timestamp: Long): String =
+    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
+
+/** 首页紧凑时长：避免“0 分钟 0 秒”破坏统计区的数字节奏。 */
+fun formatDurationCompact(millis: Long): String {
+    val minutes = millis / 60_000L
+    return if (minutes >= 60) "${minutes / 60}h ${minutes % 60}m" else "$minutes 分钟"
 }
 
-/** 把毫秒时长格式化为页面使用的小时/分钟文本。 */
-fun formatDuration(durationMillis: Long): String {
-    val totalMinutes = durationMillis / 60_000L
-    val hours = totalMinutes / 60
-    val minutes = totalMinutes % 60
-    return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+/** 全局通用时长格式，专注页和详情页共同使用。 */
+fun formatDuration(millis: Long): String {
+    val totalSeconds = millis.coerceAtLeast(0L) / 1_000L
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "%02d:%02d".format(minutes, seconds)
 }

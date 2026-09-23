@@ -93,6 +93,29 @@ sealed interface SessionUiState {
     ) : SessionUiState
 }
 
+/**
+ * 专注流程的“页面级”阶段，只在真正跨阶段时触发转场动画。
+ *
+ * Ready 的传感器数据和 Running 的倒计时都会高频变化；如果直接把完整 UiState 当动画 key，
+ * Compose 会把每个样本、每一秒都视为新页面，从而不断淡入淡出并产生闪烁。
+ */
+enum class SessionVisualPhase {
+    IDLE,
+    READY,
+    RUNNING,
+    PAUSED,
+    FINISHED
+}
+
+/** 将包含实时数据的 UiState 压缩为稳定的页面阶段 key。 */
+fun SessionUiState.visualPhase(): SessionVisualPhase = when (this) {
+    SessionUiState.Idle -> SessionVisualPhase.IDLE
+    is SessionUiState.Ready -> SessionVisualPhase.READY
+    is SessionUiState.Running -> SessionVisualPhase.RUNNING
+    is SessionUiState.Paused -> SessionVisualPhase.PAUSED
+    is SessionUiState.Finished -> SessionVisualPhase.FINISHED
+}
+
 /** 报告页周期类型。 */
 enum class ReportPeriod(val label: String) {
     WEEK("本周"),

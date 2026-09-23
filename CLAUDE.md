@@ -163,7 +163,7 @@ class LightSensorDataSource @Inject constructor(
 ### 当前短板
 
 1. **项目完成度不够** — ~~阶段 3-6 未完成，半成品是负资产~~ 已全部完成
-2. **测试覆盖为零** — 面试官会问测试策略
+2. **测试覆盖仍需扩展** — 已有 25 个单元测试与 5 个 Compose 截图回归，下一步补充真机/集成测试
 3. **性能优化未实践** — Compose 重组、Canvas 性能、内存泄漏
 4. **代码未提交** — ~~61 个文件堆着，git log 看不到进度~~ 已清理
 
@@ -183,6 +183,6 @@ class LightSensorDataSource @Inject constructor(
 
 ## 环境注意
 
-- 本机 JAVA_HOME 默认指向 `E:\jdk17`，但 Gradle 需要 JDK 21
-- 本机有 `E:\jdk21` 可用
-- PowerShell 临时验证命令：`$env:JAVA_HOME='E:\jdk21'`
+- 当前可用 JDK：`E:\environment\jdk17`
+- PowerShell 临时验证命令：`$env:JAVA_HOME='E:\environment\jdk17'`
+- Compose Preview Screenshot Testing 可在没有模拟器时生成 390 × 844 dp 的真实页面渲染图

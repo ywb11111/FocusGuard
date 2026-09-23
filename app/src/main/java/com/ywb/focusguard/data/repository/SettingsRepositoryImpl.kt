@@ -35,4 +35,16 @@ class SettingsRepositoryImpl @Inject constructor() : SettingsRepository {
     override suspend fun updateDefaultFocusMinutes(minutes: Int) {
         settingsState.value = settingsState.value.copy(defaultFocusMinutes = minutes)
     }
+
+    override suspend fun updateBackgroundMonitoringEnabled(enabled: Boolean) {
+        settingsState.value = settingsState.value.copy(backgroundMonitoringEnabled = enabled)
+    }
+
+    override suspend fun updateDailyReportEnabled(enabled: Boolean) {
+        settingsState.value = settingsState.value.copy(dailyReportEnabled = enabled)
+    }
+
+    override suspend fun completeOnboarding() {
+        settingsState.value = settingsState.value.copy(onboardingCompleted = true)
+    }
 }

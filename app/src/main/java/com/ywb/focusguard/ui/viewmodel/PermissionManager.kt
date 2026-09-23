@@ -3,6 +3,7 @@ package com.ywb.focusguard.ui.viewmodel
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.content.ContextCompat
 import com.ywb.focusguard.domain.model.PermissionState
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -48,10 +49,12 @@ class PermissionManager @Inject constructor(
      * 检查通知权限是否已授予（Android 13+ 需要）。
      */
     fun isNotificationPermissionGranted(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
+        // Android 12L 及以下没有运行时通知权限，不能把“不存在的权限”误判成拒绝。
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
     }
 
     /**

@@ -2,43 +2,46 @@ package com.ywb.focusguard.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// 深色主题使用的高亮色，数字后缀沿用 Material 主题常见的明度命名。
-val GuardTeal80 = Color(0xFF8FD8CE)
-val GuardBlue80 = Color(0xFFA7C7E7)
-val GuardAmber80 = Color(0xFFF2D58A)
+/** FocusGuard 1.0 的品牌主色：克制的青绿色，用于主要操作和良好状态。 */
+val FocusTeal = Color(0xFF10B981)
+val FocusTealStrong = Color(0xFF008F72)
+val FocusTealSoft = Color(0xFFDDF8EF)
+val FocusBlue = Color(0xFF3B82F6)
+val FocusBlueSoft = Color(0xFFE8F1FF)
+val FocusAmber = Color(0xFFF59E0B)
+val FocusAmberSoft = Color(0xFFFFF4D6)
+val FocusRed = Color(0xFFE85D65)
+val FocusRedSoft = Color(0xFFFFE9EA)
 
-// 浅色主题使用的主色、次色与警示强调色。
-val GuardTeal40 = Color(0xFF006C67)
-val GuardBlue40 = Color(0xFF2F5F8F)
-val GuardAmber40 = Color(0xFF8A6400)
+/** 浅色主题使用暖白底色和深墨色文字，保持数据界面的清晰与安静。 */
+val FocusBackground = Color(0xFFF8FAF9)
+val FocusSurface = Color(0xFFFFFFFF)
+val FocusSurfaceMuted = Color(0xFFF0F5F3)
+val FocusInk = Color(0xFF0D2530)
+val FocusInkMuted = Color(0xFF657681)
+val FocusOutline = Color(0xFFDCE6E2)
 
-/** 浅色主题页面背景，使用低对比冷灰减少长时间专注时的视觉刺激。 */
-val GuardBackground = Color(0xFFF7FAF9)
+/** 深色主题避免纯黑，并降低高饱和颜色在夜间造成的刺激。 */
+val FocusDarkBackground = Color(0xFF0C1518)
+val FocusDarkSurface = Color(0xFF142126)
+val FocusDarkSurfaceMuted = Color(0xFF1B2B30)
+val FocusDarkInk = Color(0xFFEAF5F1)
+val FocusDarkInkMuted = Color(0xFFAABAB5)
+val FocusDarkOutline = Color(0xFF304248)
 
-/** 浅色主题基础表面颜色，用于卡片和内容容器。 */
-val GuardSurface = Color(0xFFFFFFFF)
-
-// ========== 原型设计配色方案 ==========
-// 薄荷绿主色 - 传递清新专注感
-val MintPrimary = Color(0xFF6EE7B7)      // 薄荷绿 - 主色
-val MintPrimaryDark = Color(0xFF34D399)  // 深薄荷
-val MintSecondary = Color(0xFF93C5FD)    // 天蓝
-val MintAccent = Color(0xFFFBBF24)       // 琥珀黄
-val MintWarning = Color(0xFFF87171)      // 珊瑚红
-
-// 原型设计背景和表面颜色
-val MintBackground = Color(0xFFF8FAFB)   // 米白背景
-val MintSurface = Color(0xFFFFFFFF)      // 白色表面
-
-// ========== 深色模式配色方案 ==========
-// 深色模式主色 - 保持品牌一致性
-val DarkMintPrimary = Color(0xFF34D399)      // 深色模式薄荷绿
-val DarkMintPrimaryDark = Color(0xFF6EE7B7)  // 深色模式深薄荷
-val DarkMintSecondary = Color(0xFF60A5FA)    // 深色模式天蓝
-val DarkMintAccent = Color(0xFFFBBF24)       // 深色模式琥珀黄
-val DarkMintWarning = Color(0xFFF87171)      // 深色模式珊瑚红
-
-// 深色模式背景和表面颜色
-val DarkBackground = Color(0xFF111827)   // 深色背景
-val DarkSurface = Color(0xFF1F2937)      // 深色表面
-val DarkSurfaceVariant = Color(0xFF374151) // 深色表面变体
+// 兼容旧组件命名，逐步迁移时仍保持同一套品牌语义。
+val MintPrimary = FocusTeal
+val MintPrimaryDark = FocusTealStrong
+val MintSecondary = FocusBlue
+val MintAccent = FocusAmber
+val MintWarning = FocusRed
+val MintBackground = FocusBackground
+val MintSurface = FocusSurface
+val DarkMintPrimary = FocusTeal
+val DarkMintPrimaryDark = Color(0xFF35D6B2)
+val DarkMintSecondary = Color(0xFF70A8FF)
+val DarkMintAccent = Color(0xFFFFC45B)
+val DarkMintWarning = Color(0xFFFF858B)
+val DarkBackground = FocusDarkBackground
+val DarkSurface = FocusDarkSurface
+val DarkSurfaceVariant = FocusDarkSurfaceMuted

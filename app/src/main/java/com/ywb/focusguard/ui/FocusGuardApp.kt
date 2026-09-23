@@ -1,26 +1,48 @@
 package com.ywb.focusguard.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.ywb.focusguard.ui.navigation.Destination
 import com.ywb.focusguard.ui.navigation.FocusGuardNavHost
 import com.ywb.focusguard.ui.navigation.topLevelDestinations
+import com.ywb.focusguard.ui.screen.OnboardingScreen
+import com.ywb.focusguard.ui.viewmodel.AppViewModel
 
 /**
  * App 的 Compose 根组件，统一持有 NavController、Scaffold 和底部导航栏。
  * 具体页面内容交给 [FocusGuardNavHost]，避免每个 Screen 自己管理顶层导航。
  */
 @Composable
-fun FocusGuardApp() {
+fun FocusGuardApp(viewModel: AppViewModel = hiltViewModel()) {
+    val onboardingCompleted by viewModel.onboardingCompleted.collectAsStateWithLifecycle()
+    if (onboardingCompleted == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+    if (onboardingCompleted == false) {
+        OnboardingScreen(onComplete = viewModel::completeOnboarding)
+        return
+    }
+
     // NavController 是 Compose Navigation 的核心对象，负责页面跳转和返回栈管理。
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -38,29 +60,41 @@ fun FocusGuardApp() {
         }
     }
 
+    val showBottomBar = topLevelDestinations.any { it.destination.route == currentRoute }
+
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            NavigationBar {
-                topLevelDestinations.forEach { item ->
-                    NavigationBarItem(
-                        selected = currentRoute == item.destination.route,
-                        onClick = { navigateToTopLevel(item.destination) },
-                        icon = {
-                            Icon(
-                                imageVector = item.icon,
-                                contentDescription = item.label
-                            )
-                        },
-                        label = { Text(item.label) }
-                    )
-                }
-            }
+            if (showBottomBar) FocusGuardBottomBar(currentRoute, navigateToTopLevel)
         }
     ) { innerPadding ->
         FocusGuardNavHost(
             navController = navController,
-            onStartFocus = { navigateToTopLevel(Destination.Session) },
+            // 专注是一次沉浸任务而不是长期 Tab；进入后隐藏底部导航。
+            onStartFocus = {
+                navController.navigate(Destination.Session.route) {
+                    launchSingleTop = true
+                }
+            },
             modifier = Modifier.padding(innerPadding)
         )
+    }
+}
+
+/** 顶层三项导航；截图预览与真实 App 复用同一实现，避免预览和产品漂移。 */
+@Composable
+fun FocusGuardBottomBar(
+    currentRoute: String?,
+    onNavigate: (Destination) -> Unit
+) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
+        topLevelDestinations.forEach { item ->
+            NavigationBarItem(
+                selected = currentRoute == item.destination.route,
+                onClick = { onNavigate(item.destination) },
+                icon = { Icon(item.icon, contentDescription = item.label) },
+                label = { Text(item.label) }
+            )
+        }
     }
 }

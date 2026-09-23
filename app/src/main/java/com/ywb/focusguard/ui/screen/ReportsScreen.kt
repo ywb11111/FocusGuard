@@ -1,63 +1,71 @@
 package com.ywb.focusguard.ui.screen
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ywb.focusguard.domain.model.FocusSession
-import com.ywb.focusguard.ui.component.MetricCard
+import com.ywb.focusguard.ui.component.FocusPageHeader
+import com.ywb.focusguard.ui.component.FocusStat
 import com.ywb.focusguard.ui.component.SectionHeader
 import com.ywb.focusguard.ui.component.SimpleLineChart
 import com.ywb.focusguard.ui.state.ReportPeriod
 import com.ywb.focusguard.ui.state.ReportsUiState
-import com.ywb.focusguard.ui.theme.MintAccent
-import com.ywb.focusguard.ui.theme.MintPrimary
-import com.ywb.focusguard.ui.theme.MintPrimaryDark
-import com.ywb.focusguard.ui.theme.MintSecondary
+import com.ywb.focusguard.ui.theme.FocusBlueSoft
+import com.ywb.focusguard.ui.theme.FocusTealSoft
 import com.ywb.focusguard.ui.viewmodel.ReportsViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-/** 报告页路由层：收集 Room 驱动的报告状态并处理详情导航。 */
+/** 报告页路由层：收集 Room 的真实统计并处理周期选择。 */
 @Composable
 fun ReportsRoute(
     onOpenSessionDetail: (Long) -> Unit,
     viewModel: ReportsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    ReportsScreen(
-        uiState = uiState,
-        onOpenSessionDetail = onOpenSessionDetail,
-        onSwitchPeriod = viewModel::switchPeriod
-    )
+    ReportsScreen(uiState, onOpenSessionDetail, viewModel::switchPeriod)
 }
 
-/**
- * 报告页纯 UI，展示周/月汇总、趋势和历史列表。
- * 所有数据来自 Room，无 demo 占位。
- */
+/** 报告页优先回答“表现如何、主要受什么影响、下一步做什么”。 */
 @Composable
 fun ReportsScreen(
     uiState: ReportsUiState,
@@ -65,186 +73,200 @@ fun ReportsScreen(
     onSwitchPeriod: (ReportPeriod) -> Unit = {}
 ) {
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp)
     ) {
-        item {
-            Text(
-                text = "报告",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        item { FocusPageHeader(title = "报告", subtitle = "从真实记录中找到你的专注规律") }
         item {
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 ReportPeriod.entries.forEachIndexed { index, period ->
                     SegmentedButton(
                         selected = uiState.period == period,
                         onClick = { onSwitchPeriod(period) },
-                        shape = SegmentedButtonDefaults.itemShape(
-                            index = index,
-                            count = ReportPeriod.entries.size
-                        )
+                        shape = SegmentedButtonDefaults.itemShape(index, ReportPeriod.entries.size)
+                    ) { Text(period.label) }
+                }
+            }
+        }
+
+        if (uiState.sessions.isEmpty()) {
+            item { EmptyReport(uiState.period) }
+        } else {
+            item { SummaryHero(uiState) }
+            item { InsightCard(uiState) }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SectionHeader(title = "评分趋势", action = {
+                        Text("按完成时间", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    })
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
-                        Text(period.label)
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            SimpleLineChart(values = uiState.trendValues)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("较早", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("最近", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                     }
                 }
             }
-        }
-        item {
-            val summary = uiState.periodSummary
-            SectionHeader(title = "${uiState.period.label}总结")
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp)
-            ) {
-                MetricCard("总专注", formatDuration(summary.totalFocusMillis), Modifier.weight(1f))
-                MetricCard("平均分", "${summary.averageScore}", Modifier.weight(1f))
-                MetricCard("次数", "${summary.sessionCount}", Modifier.weight(1f))
-            }
-            if (summary.sessionCount > 0) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 10.dp)
-                ) {
-                    MetricCard("平均噪声", "${summary.averageNoiseDb.toInt()} dB", Modifier.weight(1f))
-                    MetricCard("平均光照", "${summary.averageLightLux.toInt()} lux", Modifier.weight(1f))
-                    MetricCard("移动", "${summary.totalMovementCount} 次", Modifier.weight(1f))
-                }
-            }
-        }
-        item {
-            SectionHeader(title = "专注趋势")
-            if (uiState.trendValues.isNotEmpty()) {
-                // 柱状图 - 原型设计风格
+            item { EnvironmentAverages(uiState) }
+            item { SectionHeader(title = "专注记录", action = {
+                Text("${uiState.sessions.size} 次", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }) }
+            item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(120.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.Bottom
-                        ) {
-                            // 简化的柱状图显示
-                            uiState.trendValues.takeLast(7).forEachIndexed { index, value ->
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(horizontal = 4.dp)
-                                        .height((value / uiState.trendValues.maxOrNull()!! * 100).dp)
-                                        .background(
-                                            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                                                colors = listOf(MintPrimary, MintPrimaryDark)
-                                            ),
-                                            shape = RoundedCornerShape(4.dp)
-                                        )
-                                )
-                            }
-                        }
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            listOf("一", "二", "三", "四", "五", "六", "日").takeLast(7).forEach { day ->
-                                Text(
-                                    text = day,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.weight(1f),
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    Column {
+                        uiState.sessions.forEachIndexed { index, session ->
+                            SessionListRow(session) { onOpenSessionDetail(session.id) }
+                            if (index != uiState.sessions.lastIndex) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant
                                 )
                             }
                         }
                     }
                 }
-            } else {
-                Text(
-                    text = "暂无数据，完成专注后这里会显示评分趋势。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 10.dp)
-                )
             }
         }
-        item {
-            SectionHeader(title = "历史记录")
+        item { Spacer(Modifier.size(4.dp)) }
+    }
+}
+
+@Composable
+private fun SummaryHero(uiState: ReportsUiState) {
+    val summary = uiState.periodSummary
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                Column {
+                    Text("${uiState.period.label}专注", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(formatDurationCompact(summary.totalFocusMillis), style = MaterialTheme.typography.headlineLarge)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("平均评分", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(summary.averageScore.toString(), style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth()) {
+                FocusStat("${summary.sessionCount} 次", "完成次数", Modifier.weight(1f), icon = Icons.Outlined.CalendarMonth)
+                FocusStat("${summary.totalMovementCount} 次", "手机移动", Modifier.weight(1f), icon = Icons.Outlined.PhoneAndroid)
+            }
         }
-        if (uiState.sessions.isEmpty()) {
-            item {
+    }
+}
+
+@Composable
+private fun InsightCard(uiState: ReportsUiState) {
+    val best = uiState.sessions.maxByOrNull { it.score }
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.Top) {
+            Surface(shape = CircleShape, color = FocusTealSoft, modifier = Modifier.size(46.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.Insights, null, tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("本期洞察", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "本${if (uiState.period == ReportPeriod.WEEK) "周" else "月"}暂无专注记录。",
+                    reportInsight(uiState, best),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            items(uiState.sessions, key = { it.id }) { session ->
-                SessionListItem(
-                    session = session,
-                    onClick = { onOpenSessionDetail(session.id) }
                 )
             }
         }
     }
 }
 
-/** 一条可点击的历史专注记录。 */
 @Composable
-private fun SessionListItem(
-    session: FocusSession,
-    onClick: () -> Unit
-) {
-    Card(
-        onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = session.note ?: "专注记录",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "${formatDuration(session.durationMillis)} · 评分 ${session.score} · 平均噪声 ${session.averageNoiseDb.toInt()} dB",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .background(MintPrimary, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text(
-                    text = "${session.score}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF065F46)
-                )
+private fun EnvironmentAverages(uiState: ReportsUiState) {
+    val summary = uiState.periodSummary
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SectionHeader(title = "环境均值")
+        Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                AverageRow(Icons.Outlined.GraphicEq, "平均噪声", "${summary.averageNoiseDb.toInt()} dB")
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                AverageRow(Icons.Outlined.LightMode, "平均光照", "${summary.averageLightLux.toInt()} lux")
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                AverageRow(Icons.Outlined.PhoneAndroid, "移动事件", "${summary.totalMovementCount} 次")
             }
         }
     }
 }
+
+@Composable
+private fun AverageRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
+        Surface(shape = CircleShape, color = FocusBlueSoft, modifier = Modifier.size(40.dp)) {
+            Box(contentAlignment = Alignment.Center) { Icon(icon, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp)) }
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+        Text(value, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+@Composable
+private fun SessionListRow(session: FocusSession, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(session.note?.takeIf { it.isNotBlank() } ?: "专注记录", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "${sessionDateText(session.startTime)} · ${formatDuration(session.durationMillis)} · ${session.averageNoiseDb.toInt()} dB",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Text(session.score.toString(), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(4.dp))
+        Icon(Icons.Outlined.ChevronRight, "查看详情", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun EmptyReport(period: ReportPeriod) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 72.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(shape = CircleShape, color = FocusTealSoft, modifier = Modifier.size(72.dp)) {
+            Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Insights, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp)) }
+        }
+        Spacer(Modifier.size(16.dp))
+        Text("还没有${period.label}记录", style = MaterialTheme.typography.titleLarge)
+        Text("完成一次专注后，这里会开始形成你的环境规律。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+private fun reportInsight(uiState: ReportsUiState, best: FocusSession?): String {
+    val summary = uiState.periodSummary
+    return when {
+        best == null -> "完成更多专注后，这里会生成个性化洞察。"
+        summary.averageNoiseDb >= 65f -> "噪声是本期最明显的影响因素。你最高分的一次为 ${best.score} 分，优先复用那次的地点与时间。"
+        summary.averageLightLux < 100f -> "本期平均光照偏暗。开始前先调整台灯，是最容易落实的改善。"
+        summary.totalMovementCount > summary.sessionCount * 2 -> "手机移动比较频繁。把手机放在固定位置，有助于减少注意力切换。"
+        else -> "本期环境整体稳定，最高分为 ${best.score} 分。继续保持当前地点和专注节奏。"
+    }
+}
+
+private fun sessionDateText(timestamp: Long): String =
+    SimpleDateFormat("M月d日 HH:mm", Locale.getDefault()).format(Date(timestamp))

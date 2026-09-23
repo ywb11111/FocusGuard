@@ -53,6 +53,7 @@ class DataStoreSettingsRepository @Inject constructor(
         val comfortableLightMaxLux = floatPreferencesKey("comfortable_light_max_lux")
         val backgroundMonitoringEnabled = booleanPreferencesKey("background_monitoring_enabled")
         val dailyReportEnabled = booleanPreferencesKey("daily_report_enabled")
+        val onboardingCompleted = booleanPreferencesKey("onboarding_completed")
     }
 
     /**
@@ -70,7 +71,8 @@ class DataStoreSettingsRepository @Inject constructor(
             comfortableLightMinLux = prefs[Keys.comfortableLightMinLux] ?: UserSettings().comfortableLightMinLux,
             comfortableLightMaxLux = prefs[Keys.comfortableLightMaxLux] ?: UserSettings().comfortableLightMaxLux,
             backgroundMonitoringEnabled = prefs[Keys.backgroundMonitoringEnabled] ?: UserSettings().backgroundMonitoringEnabled,
-            dailyReportEnabled = prefs[Keys.dailyReportEnabled] ?: UserSettings().dailyReportEnabled
+            dailyReportEnabled = prefs[Keys.dailyReportEnabled] ?: UserSettings().dailyReportEnabled,
+            onboardingCompleted = prefs[Keys.onboardingCompleted] ?: UserSettings().onboardingCompleted
         )
     }
 
@@ -101,6 +103,27 @@ class DataStoreSettingsRepository @Inject constructor(
     override suspend fun updateDefaultFocusMinutes(minutes: Int) {
         context.dataStore.edit { prefs ->
             prefs[Keys.defaultFocusMinutes] = minutes
+        }
+    }
+
+    /** 持久化后台监测开关，设置页切换后重启 App 仍然生效。 */
+    override suspend fun updateBackgroundMonitoringEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.backgroundMonitoringEnabled] = enabled
+        }
+    }
+
+    /** 持久化每日总结开关。任务调度层只读取该值，不在 UI 层直接操作 WorkManager。 */
+    override suspend fun updateDailyReportEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.dailyReportEnabled] = enabled
+        }
+    }
+
+    /** 只在用户主动完成或跳过引导时写入，避免重组误触发。 */
+    override suspend fun completeOnboarding() {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.onboardingCompleted] = true
         }
     }
 }

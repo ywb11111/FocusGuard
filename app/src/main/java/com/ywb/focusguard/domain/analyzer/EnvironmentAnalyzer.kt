@@ -37,4 +37,36 @@ class EnvironmentAnalyzer {
         EnvironmentStatus.TOO_BRIGHT -> "光线偏亮"
         EnvironmentStatus.MOVING -> "手机活动频繁"
     }
+
+    /**
+     * 生成 0..100 的环境准备度分数。
+     *
+     * 该分数只描述“此刻环境是否适合开始”，不等同于一次专注结束后的表现评分。
+     * 扣分规则显式写出，后续可以在设置接入用户自定义阈值而不修改 UI。
+     */
+    fun readinessScore(snapshot: EnvironmentSnapshot): Int {
+        val noisePenalty = when (snapshot.noise.level) {
+            NoiseLevel.QUIET -> 0
+            NoiseLevel.NORMAL -> 6
+            NoiseLevel.NOISY -> 18
+            NoiseLevel.LOUD -> 30
+        }
+        val lightPenalty = when (snapshot.light.level) {
+            LightLevel.COMFORTABLE -> 0
+            LightLevel.DIM -> 8
+            LightLevel.DARK -> 22
+            LightLevel.BRIGHT -> 12
+        }
+        val motionPenalty = if (snapshot.motion.isMoving) 18 else 0
+        return (100 - noisePenalty - lightPenalty - motionPenalty).coerceIn(0, 100)
+    }
+
+    /** 将准备度转换成用户可以直接行动的短说明。 */
+    fun guidance(snapshot: EnvironmentSnapshot): String = when (snapshot.status) {
+        EnvironmentStatus.FOCUSED -> "当前环境较为理想，可以开始专注。"
+        EnvironmentStatus.NOISY -> "声音偏高，换个更安静的位置会更好。"
+        EnvironmentStatus.TOO_DARK -> "光线偏暗，建议先调整台灯或屏幕亮度。"
+        EnvironmentStatus.TOO_BRIGHT -> "光线偏亮，减少直射光后再开始更舒适。"
+        EnvironmentStatus.MOVING -> "先把手机放稳，能减少专注过程中的干扰。"
+    }
 }

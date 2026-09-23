@@ -41,9 +41,11 @@ class SessionDetailUiStateTest {
 
         assertEquals(9L, uiState.sessionId)
         assertEquals("专注详情 #9", uiState.title)
-        assertEquals("3m", uiState.durationText)
+        assertEquals("03:00", uiState.durationText)
         assertEquals("86", uiState.scoreText)
         assertEquals("噪声 -8 · 光照 -2 · 移动 -4 · 分心 -0", uiState.scoreBreakdownText)
         assertEquals("整体环境稳定。", uiState.suggestionText)
+        assertEquals("44 dB", uiState.averageNoiseText)
+        assertEquals("220 lux", uiState.averageLightText)
     }
 }

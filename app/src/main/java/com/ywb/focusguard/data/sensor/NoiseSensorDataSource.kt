@@ -38,7 +38,7 @@ private const val TAG = "NoiseSensorDataSource"
  */
 @Singleton
 class NoiseSensorDataSource @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     /** 采样率：44100 Hz 是 CD 音质标准，所有 Android 设备都支持。 */
     private val sampleRate = 44100

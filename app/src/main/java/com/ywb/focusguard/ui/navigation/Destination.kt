@@ -3,7 +3,6 @@ package com.ywb.focusguard.ui.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -53,7 +52,6 @@ data class TopLevelDestination(
 /** App 固定显示的四个顶层导航入口。 */
 val topLevelDestinations = listOf(
     TopLevelDestination(Destination.Today, "今日", Icons.Outlined.Home),
-    TopLevelDestination(Destination.Session, "专注", Icons.Outlined.PlayCircle),
     TopLevelDestination(Destination.Reports, "报告", Icons.Outlined.Analytics),
     TopLevelDestination(Destination.Settings, "设置", Icons.Outlined.Settings)
 )

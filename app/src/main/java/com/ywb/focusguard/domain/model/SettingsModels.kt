@@ -9,6 +9,7 @@ package com.ywb.focusguard.domain.model
  * @property comfortableLightMaxLux 舒适光照上限，单位 lux。
  * @property backgroundMonitoringEnabled 是否允许专注期间后台监测。
  * @property dailyReportEnabled 是否生成每日总结。
+ * @property onboardingCompleted 是否已完成首次使用引导。
  */
 data class UserSettings(
     val defaultFocusMinutes: Int = 25,
@@ -16,7 +17,8 @@ data class UserSettings(
     val comfortableLightMinLux: Float = 100f,
     val comfortableLightMaxLux: Float = 500f,
     val backgroundMonitoringEnabled: Boolean = false,
-    val dailyReportEnabled: Boolean = true
+    val dailyReportEnabled: Boolean = true,
+    val onboardingCompleted: Boolean = false
 )
 
 /**

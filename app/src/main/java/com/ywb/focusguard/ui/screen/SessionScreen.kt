@@ -1,71 +1,82 @@
 package com.ywb.focusguard.ui.screen
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Analytics
+import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.StopCircle
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedAssistChip
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.ywb.focusguard.ui.component.MetricCard
+import com.ywb.focusguard.domain.model.EnvironmentSnapshot
+import com.ywb.focusguard.domain.model.LightLevel
+import com.ywb.focusguard.domain.model.NoiseLevel
+import com.ywb.focusguard.ui.component.EnvironmentMetricRow
+import com.ywb.focusguard.ui.component.FocusDivider
+import com.ywb.focusguard.ui.component.FocusPageHeader
+import com.ywb.focusguard.ui.component.PositiveStatus
 import com.ywb.focusguard.ui.component.SectionHeader
-import com.ywb.focusguard.ui.component.SimpleLineChart
 import com.ywb.focusguard.ui.state.SessionUiState
-import com.ywb.focusguard.ui.theme.MintAccent
-import com.ywb.focusguard.ui.theme.MintPrimary
-import com.ywb.focusguard.ui.theme.MintPrimaryDark
-import com.ywb.focusguard.ui.theme.MintSecondary
-import com.ywb.focusguard.ui.theme.MintWarning
+import com.ywb.focusguard.ui.state.visualPhase
+import com.ywb.focusguard.ui.theme.FocusAmberSoft
+import com.ywb.focusguard.ui.theme.FocusTealSoft
 import com.ywb.focusguard.ui.viewmodel.SessionViewModel
 
-/** 专注页路由层：收集 ViewModel 状态，并把用户事件映射为状态机方法。 */
+/** 专注流程路由：把状态机方法转换为 UI 事件。 */
 @Composable
 fun SessionRoute(
     onFinish: (Long) -> Unit,
     viewModel: SessionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    // Route 层负责把 ViewModel 和纯 UI 组件接起来；SessionScreen 本身不直接知道 ViewModel。
     SessionScreen(
         uiState = uiState,
         onStart = viewModel::startSession,
+        onSelectDuration = viewModel::selectDuration,
         onPause = viewModel::pauseSession,
         onResume = viewModel::resumeSession,
         onFinish = viewModel::finishSession,
@@ -74,540 +85,378 @@ fun SessionRoute(
     )
 }
 
-/**
- * 专注页纯 UI，根据 sealed UiState 只展示当前合法阶段。
- * 所有计时、数据库和传感器逻辑都留在 ViewModel/Repository/DataSource。
- */
+/** 单一状态机驱动完整专注流程，避免准备、运行和完成页面同时存在。 */
 @Composable
 fun SessionScreen(
     uiState: SessionUiState,
     onStart: () -> Unit,
+    onSelectDuration: (Int) -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onFinish: () -> Unit,
     onReset: () -> Unit,
     onOpenDetail: (Long) -> Unit
 ) {
-    // 状态切换动画：使用 AnimatedVisibility 实现淡入淡出 + 滑动效果
-    var previousState by remember { mutableStateOf<SessionUiState?>(null) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
-    ) {
-        Text(
-            text = "专注",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
-        )
-
-        // UI 只根据状态分支显示不同内容；真正的状态切换发生在 SessionViewModel。
-        // 使用 AnimatedVisibility 实现状态切换动画
-        AnimatedVisibility(
-            visible = uiState is SessionUiState.Idle,
-            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(animationSpec = tween(300)),
-            exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(animationSpec = tween(300))
-        ) {
-            Text("准备专注")
-        }
-
-        AnimatedVisibility(
-            visible = uiState is SessionUiState.Ready,
-            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(animationSpec = tween(300)),
-            exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(animationSpec = tween(300))
-        ) {
-            if (uiState is SessionUiState.Ready) {
-                ReadySessionContent(uiState, onStart)
+    AnimatedContent(
+        targetState = uiState,
+        // 高频字段变化只重组当前内容；只有 Ready -> Running 等阶段变化才执行整页转场。
+        contentKey = { state -> state.visualPhase() },
+        transitionSpec = { fadeIn() togetherWith fadeOut() using SizeTransform(clip = false) },
+        label = "session-state"
+    ) { state ->
+        when (state) {
+            SessionUiState.Idle -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
             }
-        }
-
-        AnimatedVisibility(
-            visible = uiState is SessionUiState.Running,
-            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(animationSpec = tween(300)),
-            exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(animationSpec = tween(300))
-        ) {
-            if (uiState is SessionUiState.Running) {
-                RunningSessionContent(uiState, onPause, onFinish)
-            }
-        }
-
-        AnimatedVisibility(
-            visible = uiState is SessionUiState.Paused,
-            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(animationSpec = tween(300)),
-            exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(animationSpec = tween(300))
-        ) {
-            if (uiState is SessionUiState.Paused) {
-                PausedSessionContent(uiState, onResume, onFinish)
-            }
-        }
-
-        AnimatedVisibility(
-            visible = uiState is SessionUiState.Finished,
-            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(animationSpec = tween(300)),
-            exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(animationSpec = tween(300))
-        ) {
-            if (uiState is SessionUiState.Finished) {
-                FinishedSessionContent(uiState, onReset, onOpenDetail)
-            }
+            is SessionUiState.Ready -> ReadySessionContent(state, onStart, onSelectDuration)
+            is SessionUiState.Running -> RunningSessionContent(state, onPause, onFinish)
+            is SessionUiState.Paused -> PausedSessionContent(state, onResume, onFinish)
+            is SessionUiState.Finished -> FinishedSessionContent(state, onReset, onOpenDetail)
         }
     }
 }
 
-/** 准备状态内容：展示模式、环境预检和开始入口。 */
+/** 准备页完成时长选择与环境预检，开始后配置被冻结。 */
 @Composable
 private fun ReadySessionContent(
     uiState: SessionUiState.Ready,
-    onStart: () -> Unit
+    onStart: () -> Unit,
+    onSelectDuration: (Int) -> Unit
 ) {
-    // 时长选择 - 原型设计风格
-    SectionHeader(title = "选择时长")
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.fillMaxWidth()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        listOf(25, 45, 60).forEach { minutes ->
-            // 按钮点击动画：按下时缩放，释放时恢复
-            var isPressed by remember { mutableStateOf(false) }
-            val scale by animateFloatAsState(
-                targetValue = if (isPressed) 0.95f else 1f,
-                animationSpec = tween(100)
-            )
+        FocusPageHeader(title = "专注准备", subtitle = "先设置时长，再确认此刻的环境")
 
-            Card(
-                onClick = { /* TODO: 设置选择的时长 */ },
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SectionHeader(title = "本次时长")
+            Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .scale(scale),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (minutes == 25) MintPrimary else MaterialTheme.colorScheme.surface
-                )
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "$minutes",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (minutes == 25) Color(0xFF065F46) else MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "分钟",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (minutes == 25) Color(0xFF047857) else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                listOf(25, 45, 60).forEach { minutes ->
+                    val selected = uiState.config.durationMinutes == minutes
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onSelectDuration(minutes) },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (selected) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent,
+                        tonalElevation = if (selected) 2.dp else 0.dp
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                "$minutes",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                            Text("分钟", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
             }
         }
-    }
 
-    // 环境预检 - 原型设计风格
-    SectionHeader(title = "环境预检")
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            val environment = uiState.environment
-            EnvironmentCheckItem(
-                icon = "🔊",
-                label = "噪声",
-                status = environment?.noise?.level?.name ?: "WAIT"
-            )
-            EnvironmentCheckItem(
-                icon = "💡",
-                label = "光照",
-                status = environment?.light?.level?.name ?: "WAIT"
-            )
-            EnvironmentCheckItem(
-                icon = "📱",
-                label = "手机",
-                status = if (environment?.motion?.isSignificantMove == true) "活动" else "稳定"
-            )
-        }
-    }
-
-    // 开始按钮 - 原型设计风格（渐变背景 + 点击动画）
-    var isButtonPressed by remember { mutableStateOf(false) }
-    val buttonScale by animateFloatAsState(
-        targetValue = if (isButtonPressed) 0.95f else 1f,
-        animationSpec = tween(100)
-    )
-
-    Button(
-        onClick = onStart,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .scale(buttonScale),
-        shape = RoundedCornerShape(12.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color.Transparent
-        ),
-        contentPadding = ButtonDefaults.TextButtonContentPadding
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(MintPrimary, MintPrimaryDark)
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+        Column {
+            SectionHeader(title = "环境预检", action = { EnvironmentPrecheckStatus(uiState.environment) })
+            Spacer(Modifier.height(10.dp))
+            Card(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Icon(
-                    Icons.Outlined.PlayArrow,
-                    contentDescription = null,
-                    tint = Color(0xFF065F46)
-                )
-                Text(
-                    text = "开始专注",
-                    modifier = Modifier.padding(start = 8.dp),
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF065F46)
-                )
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    ReadyNoiseRow(uiState.environment)
+                    FocusDivider()
+                    ReadyLightRow(uiState.environment)
+                    FocusDivider()
+                    ReadyMotionRow(uiState.environment)
+                }
             }
         }
+
+        Button(
+            onClick = onStart,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(58.dp),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Icon(Icons.Outlined.PlayArrow, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("开始 ${uiState.config.durationMinutes} 分钟专注", style = MaterialTheme.typography.titleMedium)
+        }
+        Text(
+            "专注期间会采集相对音量、环境光照和手机移动事件，不保存原始音频。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
-/** 运行状态内容：展示倒计时、环境摘要和暂停/结束操作。 */
+/** 运行页主动降低信息密度，倒计时是唯一视觉中心。 */
 @Composable
 private fun RunningSessionContent(
     uiState: SessionUiState.Running,
     onPause: () -> Unit,
     onFinish: () -> Unit
 ) {
-    // 倒计时显示 - 原型设计风格
+    val total = uiState.elapsedMillis + (uiState.remainingMillis ?: 0L)
+    val progress = if (total > 0L) uiState.elapsedMillis.toFloat() / total else 0f
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp, vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 倒计时数字动画：使用 animateFloatAsState 实现数字变化动画
-        val animatedRemainingTime by animateFloatAsState(
-            targetValue = (uiState.remainingMillis ?: 0L).toFloat(),
-            animationSpec = tween(300)
-        )
-
-        Text(
-            text = formatDuration(uiState.remainingMillis ?: 0L),
-            style = MaterialTheme.typography.displayLarge,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = "剩余时间",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-
-    // 环境实时数据 - 原型设计风格
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceAround
-        ) {
-            EnvironmentDataItem(icon = "🔊", value = "${uiState.noiseSamples.lastOrNull()?.decibel?.toInt() ?: 0} dB")
-            EnvironmentDataItem(icon = "💡", value = "${uiState.lightLevel.name}")
-            EnvironmentDataItem(icon = "📱", value = "${uiState.movementCount} 次")
-        }
-    }
-
-    // 控制按钮 - 原型设计风格
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        // 暂停按钮动画
-        var isPausePressed by remember { mutableStateOf(false) }
-        val pauseScale by animateFloatAsState(
-            targetValue = if (isPausePressed) 0.95f else 1f,
-            animationSpec = tween(100)
-        )
-
-        OutlinedButton(
-            onClick = onPause,
-            modifier = Modifier
-                .weight(1f)
-                .scale(pauseScale),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text("暂停")
-        }
-
-        // 结束按钮动画
-        var isFinishPressed by remember { mutableStateOf(false) }
-        val finishScale by animateFloatAsState(
-            targetValue = if (isFinishPressed) 0.95f else 1f,
-            animationSpec = tween(100)
-        )
-
-        Button(
-            onClick = onFinish,
-            modifier = Modifier
-                .weight(1f)
-                .scale(finishScale),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MintWarning
+        Text("保持专注", style = MaterialTheme.typography.titleLarge)
+        Text("环境变化会被安静地记录", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.weight(0.8f))
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(250.dp)) {
+            CircularProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxSize(),
+                strokeWidth = 12.dp,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
-        ) {
-            Text("结束", color = Color.White)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(formatDuration(uiState.remainingMillis ?: 0L), style = MaterialTheme.typography.displayLarge)
+                Text("剩余时间", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.height(34.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            LiveMetric(Icons.Outlined.GraphicEq, uiState.noiseSamples.lastOrNull()?.let { "${it.decibel.toInt()} dB" } ?: "检测中", "噪声")
+            LiveMetric(Icons.Outlined.LightMode, lightLabel(uiState.lightLevel), "光照")
+            LiveMetric(Icons.Outlined.PhoneAndroid, "${uiState.movementCount} 次", "移动")
+        }
+        Spacer(Modifier.weight(1f))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = onPause, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(14.dp)) {
+                Icon(Icons.Outlined.Pause, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text("暂停")
+            }
+            Button(onClick = onFinish, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(14.dp)) {
+                Icon(Icons.Outlined.StopCircle, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text("完成")
+            }
         }
     }
 }
 
-/** 暂停状态内容：冻结时间并提供继续或结束操作。 */
+/** 暂停页冻结计时，并明确继续与提前完成两条路径。 */
 @Composable
 private fun PausedSessionContent(
     uiState: SessionUiState.Paused,
     onResume: () -> Unit,
     onFinish: () -> Unit
 ) {
-    Text(
-        text = "已暂停",
-        style = MaterialTheme.typography.displaySmall,
-        fontWeight = FontWeight.SemiBold
-    )
-    Text(
-        text = "已专注 ${formatDuration(uiState.elapsedMillis)} · 剩余 ${formatDuration(uiState.remainingMillis ?: 0L)}",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Button(
-            // 继续时不会清空已用时长，而是从 Paused 状态恢复计时。
-            onClick = onResume,
-            modifier = Modifier.weight(1f)
-        ) {
-            Text("继续")
-        }
-        OutlinedButton(
-            onClick = onFinish,
-            modifier = Modifier.weight(1f)
-        ) {
-            Text("结束")
-        }
-    }
-}
-
-/** 环境预检项目 */
-@Composable
-private fun EnvironmentCheckItem(
-    icon: String,
-    label: String,
-    status: String
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = icon,
-            style = MaterialTheme.typography.bodyLarge
-        )
-        Text(
-            text = label,
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 12.dp),
-            style = MaterialTheme.typography.bodyMedium
-        )
-        Text(
-            text = "✓ $status",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MintPrimaryDark,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
-
-/** 环境数据项 - 运行中状态显示 */
-@Composable
-private fun EnvironmentDataItem(
-    icon: String,
-    value: String
-) {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = icon,
-            style = MaterialTheme.typography.bodyLarge
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-    }
-}
-
-/** 评分拆解项 - 带进度条 */
-@Composable
-private fun ScoreBreakdownItem(
-    label: String,
-    score: Int,
-    maxScore: Int,
-    color: Color
-) {
-    Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(40.dp)
-        )
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(6.dp)
-                .background(MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(3.dp))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(score.toFloat() / maxScore)
-                    .height(6.dp)
-                    .background(color, RoundedCornerShape(3.dp))
-            )
+        Surface(shape = CircleShape, color = FocusAmberSoft, modifier = Modifier.size(76.dp)) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Outlined.Pause, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(34.dp))
+            }
         }
+        Spacer(Modifier.height(20.dp))
+        Text("专注已暂停", style = MaterialTheme.typography.headlineMedium)
         Text(
-            text = "$score/$maxScore",
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(start = 8.dp)
+            "已完成 ${formatDuration(uiState.elapsedMillis)}，休息好再继续。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        Spacer(Modifier.height(36.dp))
+        Button(onClick = onResume, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(14.dp)) {
+            Icon(Icons.Outlined.PlayArrow, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("继续专注")
+        }
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(onClick = onFinish, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(14.dp)) {
+            Text("提前完成")
+        }
     }
 }
 
-/** 完成状态内容：展示最终评分，并提供详情和重置入口。 */
+/** 完成页用可解释扣分和一条建议替代单纯庆祝。 */
 @Composable
 private fun FinishedSessionContent(
     uiState: SessionUiState.Finished,
     onReset: () -> Unit,
     onOpenDetail: (Long) -> Unit
 ) {
-    // 完成卡片 - 原型设计风格
+    val session = uiState.session
     Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp)
     ) {
-        // 庆祝动画：使用 animateFloatAsState 实现弹性动画
-        val celebrationScale by animateFloatAsState(
-            targetValue = 1f,
-            animationSpec = tween(500)
-        )
-
-        Text(
-            text = "🎉",
-            style = MaterialTheme.typography.displayLarge,
-            modifier = Modifier.scale(celebrationScale)
-        )
-        Text(
-            text = "专注完成！",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(top = 16.dp)
-        )
-        Text(
-            text = "你专注了 ${formatDuration(uiState.session.durationMillis)}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-    }
-
-    // 评分卡片 - 原型设计风格
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(
-            modifier = Modifier.padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        FocusPageHeader(title = "专注完成", subtitle = "记录已保存，看看这次发生了什么")
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
         ) {
-            // 评分数字动画：从 0 到目标值的计数动画
-            var animatedScore by remember { mutableStateOf(0) }
-            val targetScore = uiState.session.score
-
-            // 使用 LaunchedEffect 触发计数动画
-            androidx.compose.runtime.LaunchedEffect(targetScore) {
-                for (i in 0..targetScore) {
-                    animatedScore = i
-                    kotlinx.coroutines.delay(10) // 10ms 间隔，实现流畅计数
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(22.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("本次评分", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(session.score.toString(), style = MaterialTheme.typography.displayMedium)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    PositiveStatus(if (session.score >= 80) "表现稳定" else "已完成")
+                    Spacer(Modifier.height(10.dp))
+                    Text(formatDuration(session.durationMillis), style = MaterialTheme.typography.titleLarge)
                 }
             }
+        }
 
-            Text(
-                text = "$animatedScore",
-                style = MaterialTheme.typography.displayLarge,
-                fontWeight = FontWeight.Bold,
-                color = MintPrimaryDark
-            )
-            Text(
-                text = "环境评分",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            SectionHeader(title = "环境表现")
+            ScoreBar("噪声", session.averageNoiseDb.coerceIn(0f, 100f) / 100f, "${session.averageNoiseDb.toInt()} dB")
+            ScoreBar("光照", (session.averageLightLux.coerceIn(0f, 800f) / 800f), "${session.averageLightLux.toInt()} lux")
+            ScoreBar("手机移动", (session.movementCount / 10f).coerceIn(0f, 1f), "${session.movementCount} 次")
+        }
 
-            // 评分拆解 - 原型设计风格
-            ScoreBreakdownItem(label = "噪声", score = 24, maxScore = 25, color = MintPrimaryDark)
-            ScoreBreakdownItem(label = "光照", score = 18, maxScore = 20, color = MintAccent)
-            ScoreBreakdownItem(label = "移动", score = 18, maxScore = 20, color = MintSecondary)
-            ScoreBreakdownItem(label = "时长", score = 28, maxScore = 35, color = MintPrimary)
+        Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.Top) {
+                Icon(Icons.Outlined.Analytics, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("下一次建议", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        completionSuggestion(session.averageNoiseDb, session.averageLightLux, session.movementCount),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Button(onClick = { onOpenDetail(session.id) }, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(14.dp)) {
+            Text("查看完整分析")
+        }
+        OutlinedButton(onClick = onReset, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(14.dp)) {
+            Icon(Icons.Outlined.Refresh, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("再次专注")
         }
     }
+}
 
-    // 按钮 - 原型设计风格
-    var isDetailPressed by remember { mutableStateOf(false) }
-    val detailScale by animateFloatAsState(
-        targetValue = if (isDetailPressed) 0.95f else 1f,
-        animationSpec = tween(100)
+@Composable
+private fun EnvironmentPrecheckStatus(environment: EnvironmentSnapshot?) {
+    if (environment == null) {
+        Text("检测中", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    } else if (environment.status == com.ywb.focusguard.domain.model.EnvironmentStatus.FOCUSED) {
+        PositiveStatus("状态良好")
+    } else {
+        Text("建议先调整", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
+    }
+}
+
+@Composable
+private fun ReadyNoiseRow(environment: EnvironmentSnapshot?) {
+    val level = environment?.noise?.level
+    val healthy = level == NoiseLevel.QUIET || level == NoiseLevel.NORMAL
+    EnvironmentMetricRow(
+        Icons.Outlined.GraphicEq,
+        "噪声",
+        environment?.let { "${it.noise.decibel.toInt()} dB" } ?: "-- dB",
+        when (level) { NoiseLevel.QUIET -> "安静"; NoiseLevel.NORMAL -> "适中"; NoiseLevel.NOISY -> "偏吵"; NoiseLevel.LOUD -> "嘈杂"; null -> "检测中" },
+        if (level == null) "等待麦克风数据" else if (healthy) "适合专注" else "建议降低噪声",
+        healthy
     )
+}
 
-    Button(
-        onClick = { onOpenDetail(uiState.session.id) },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .scale(detailScale),
-        shape = RoundedCornerShape(12.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MintPrimary
-        )
-    ) {
-        Text(
-            text = "查看详情",
-            fontWeight = FontWeight.SemiBold,
-            color = Color(0xFF065F46)
+@Composable
+private fun ReadyLightRow(environment: EnvironmentSnapshot?) {
+    val level = environment?.light?.level
+    val healthy = level == LightLevel.COMFORTABLE
+    EnvironmentMetricRow(
+        Icons.Outlined.LightMode,
+        "光照",
+        environment?.let { "${it.light.lux.toInt()} lux" } ?: "-- lux",
+        lightLabel(level),
+        if (level == null) "等待光照传感器" else if (healthy) "适合阅读" else "建议调整光源",
+        healthy
+    )
+}
+
+@Composable
+private fun ReadyMotionRow(environment: EnvironmentSnapshot?) {
+    val healthy = environment != null && !environment.motion.isMoving
+    EnvironmentMetricRow(
+        Icons.Outlined.PhoneAndroid,
+        "手机",
+        if (environment == null) "--" else if (environment.motion.isMoving) "移动中" else "稳定",
+        if (environment == null) "检测中" else if (healthy) "稳定" else "移动",
+        if (environment == null) "等待移动传感器" else if (healthy) "未检测到明显移动" else "请先放稳手机",
+        healthy
+    )
+}
+
+@Composable
+private fun LiveMetric(icon: ImageVector, value: String, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Surface(shape = CircleShape, color = FocusTealSoft, modifier = Modifier.size(44.dp)) {
+            Box(contentAlignment = Alignment.Center) { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(value, style = MaterialTheme.typography.titleSmall)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun ScoreBar(label: String, value: Float, trailing: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            Text(trailing, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        LinearProgressIndicator(
+            progress = { value.coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth().height(7.dp).clip(CircleShape),
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
     }
+}
+
+private fun lightLabel(level: LightLevel?): String = when (level) {
+    LightLevel.DARK -> "过暗"
+    LightLevel.DIM -> "偏暗"
+    LightLevel.COMFORTABLE -> "适宜"
+    LightLevel.BRIGHT -> "偏亮"
+    null -> "检测中"
+}
+
+private fun completionSuggestion(noise: Float, light: Float, moves: Int): String = when {
+    noise >= 65f -> "本次噪声偏高。下次优先换到更安静的位置，通常比延长时长更有效。"
+    light < 100f -> "本次光照偏暗。下次开始前先调整台灯，能降低长时间阅读的疲劳。"
+    light > 800f -> "本次光线偏亮。减少直射光或调整屏幕角度会更舒适。"
+    moves >= 3 -> "手机移动较多。下次把它放在固定位置，并提前开启勿扰模式。"
+    else -> "这次环境整体稳定，可以保留当前地点和时间段作为你的专注模板。"
 }

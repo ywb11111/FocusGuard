@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ywb.focusguard.data.repository.EnvironmentRepository
 import com.ywb.focusguard.data.repository.FocusRepository
+import com.ywb.focusguard.data.repository.SettingsRepository
 import com.ywb.focusguard.domain.model.EnvironmentSnapshot
 import com.ywb.focusguard.domain.model.FocusConfig
 import com.ywb.focusguard.domain.model.LightLevel
@@ -44,15 +45,17 @@ class SessionViewModel @Inject constructor(
     environmentRepository: EnvironmentRepository,
     /** 创建和结束 Room 会话，保存采样数据。 */
     private val focusRepository: FocusRepository,
+    /** 提供默认时长；准备页仍允许用户为本次会话临时选择其他时长。 */
+    private val settingsRepository: SettingsRepository,
     /** Android Application Context，用于启动前台服务。 */
     application: Application
 ) : AndroidViewModel(application) {
 
-    /** 当前固定使用的默认专注配置，后续从 SettingsRepository 读取。 */
-    private val defaultConfig = FocusConfig(durationMinutes = 25)
+    /** 准备页当前选中的时长；开始后冻结，避免设置变化影响正在运行的会话。 */
+    private var selectedDurationMinutes = 25
 
-    /** 目标专注总时长，单位毫秒。 */
-    private val sessionDurationMillis = defaultConfig.durationMinutes * 60 * 1000L
+    /** 本次已开始会话的目标时长，单位毫秒。 */
+    private var targetDurationMillis = selectedDurationMinutes * 60 * 1000L
 
     /** 采样间隔：每 10 秒保存一次光照数据。 */
     private val sampleIntervalMillis = 10_000L
@@ -68,7 +71,7 @@ class SessionViewModel @Inject constructor(
 
     /** ViewModel 内部可修改的专注状态源。 */
     private val _uiState = MutableStateFlow<SessionUiState>(
-        SessionUiState.Ready(defaultConfig, null)
+        SessionUiState.Ready(FocusConfig(selectedDurationMinutes), null)
     )
     val uiState: StateFlow<SessionUiState> = _uiState.asStateFlow()
 
@@ -90,10 +93,27 @@ class SessionViewModel @Inject constructor(
     /** 暂停前已累计的时长。 */
     private var accumulatedMillis = 0L
 
+    /** 运行期间已确认的移动事件数，用于实时反馈并在暂停/继续时保留。 */
+    private var movementCount = 0
+
     /** 订阅通知栏控制事件。 */
     private var controlEventJob: Job? = null
 
     init {
+        // 默认时长来自 DataStore；只在准备状态同步，绝不修改已经开始的会话目标。
+        viewModelScope.launch {
+            settingsRepository.settings.collect { settings ->
+                _uiState.update { current ->
+                    if (current is SessionUiState.Ready) {
+                        selectedDurationMinutes = settings.defaultFocusMinutes
+                        current.copy(config = current.config.copy(durationMinutes = selectedDurationMinutes))
+                    } else {
+                        current
+                    }
+                }
+            }
+        }
+
         // 准备阶段持续更新环境预检
         viewModelScope.launch {
             environment.collect { snapshot ->
@@ -122,17 +142,34 @@ class SessionViewModel @Inject constructor(
     fun startSession() {
         val now = System.currentTimeMillis()
         viewModelScope.launch {
-            activeSessionId = focusRepository.startSession(defaultConfig)
+            val config = (_uiState.value as? SessionUiState.Ready)?.config
+                ?: FocusConfig(selectedDurationMinutes)
+            targetDurationMillis = config.durationMinutes * 60 * 1000L
+            activeSessionId = focusRepository.startSession(config)
             runStartedAt = now
             accumulatedMillis = 0L
+            movementCount = 0
             emitRunningState(elapsedMillis = 0L)
             // 初始化共享状态
-            SessionStateHolder.startSession(activeSessionId, sessionDurationMillis)
+            SessionStateHolder.startSession(activeSessionId, targetDurationMillis)
             startTicker()
             startSampling()
             startMotionWatch()
             // 启动前台服务
-            FocusMonitorService.start(getApplication(), activeSessionId, sessionDurationMillis)
+            FocusMonitorService.start(getApplication(), activeSessionId, targetDurationMillis)
+        }
+    }
+
+    /** 为当前尚未开始的会话选择时长，避免把一次性选择强行写回全局设置。 */
+    fun selectDuration(minutes: Int) {
+        if (minutes !in 1..180) return
+        _uiState.update { current ->
+            if (current is SessionUiState.Ready) {
+                selectedDurationMinutes = minutes
+                current.copy(config = current.config.copy(durationMinutes = minutes))
+            } else {
+                current
+            }
         }
     }
 
@@ -157,6 +194,7 @@ class SessionViewModel @Inject constructor(
         samplingJob?.cancel()
         motionWatchJob?.cancel()
         accumulatedMillis = current.elapsedMillis
+        runStartedAt = 0L
         _uiState.value = SessionUiState.Paused(
             sessionId = current.sessionId,
             elapsedMillis = current.elapsedMillis,
@@ -201,7 +239,8 @@ class SessionViewModel @Inject constructor(
         activeSessionId = 0L
         runStartedAt = 0L
         accumulatedMillis = 0L
-        _uiState.value = SessionUiState.Ready(defaultConfig, environment.value)
+        movementCount = 0
+        _uiState.value = SessionUiState.Ready(FocusConfig(selectedDurationMinutes), environment.value)
     }
 
     /** 启动计时器：每秒更新一次。 */
@@ -211,7 +250,7 @@ class SessionViewModel @Inject constructor(
             while (true) {
                 val elapsedMillis = currentElapsedMillis()
                 emitRunningState(elapsedMillis)
-                if (elapsedMillis >= sessionDurationMillis) {
+                if (elapsedMillis >= targetDurationMillis) {
                     completeSession(elapsedMillis)
                     break
                 }
@@ -272,6 +311,7 @@ class SessionViewModel @Inject constructor(
                 val sessionId = activeSessionId
                 val motion = snapshot?.motion
                 if (sessionId != 0L && motion != null && motion.isSignificantMove) {
+                    movementCount += 1
                     focusRepository.saveMotionEvent(
                         sessionId = sessionId,
                         event = MotionSample(
@@ -289,14 +329,14 @@ class SessionViewModel @Inject constructor(
     /** 根据累计时长和最新环境快照生成 Running 状态。 */
     private fun emitRunningState(elapsedMillis: Long) {
         val snapshot = environment.value
-        val remainingMillis = (sessionDurationMillis - elapsedMillis).coerceAtLeast(0L)
+        val remainingMillis = (targetDurationMillis - elapsedMillis).coerceAtLeast(0L)
         _uiState.value = SessionUiState.Running(
             sessionId = activeSessionId,
             elapsedMillis = elapsedMillis,
             remainingMillis = remainingMillis,
-            noiseSamples = emptyList(),
+            noiseSamples = snapshot?.noise?.let(::listOf) ?: emptyList(),
             lightLevel = snapshot?.light?.level ?: LightLevel.COMFORTABLE,
-            movementCount = 0 // Running 期间不累计，结束时从数据库统计
+            movementCount = movementCount
         )
         // 更新共享状态（通知使用）
         SessionStateHolder.updateRemaining(remainingMillis)
@@ -306,6 +346,13 @@ class SessionViewModel @Inject constructor(
     private fun completeSession(elapsedMillis: Long) {
         val sessionId = activeSessionId
         if (sessionId == 0L) return
+        activeSessionId = 0L
+        tickerJob?.cancel()
+        samplingJob?.cancel()
+        motionWatchJob?.cancel()
+        runStartedAt = 0L
+        SessionStateHolder.endSession()
+        FocusMonitorService.stop(getApplication())
         viewModelScope.launch {
             val session = focusRepository.finishSession(sessionId, elapsedMillis)
             _uiState.value = SessionUiState.Finished(session)
