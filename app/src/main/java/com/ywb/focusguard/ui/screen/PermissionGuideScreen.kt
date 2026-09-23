@@ -40,7 +40,7 @@ fun PermissionGuideScreen(onBack: () -> Unit = {}) {
         FocusPageHeader(
             title = "权限说明",
             subtitle = "只申请完成专注监测真正需要的能力",
-            trailing = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } }
+            leading = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } }
         )
         PermissionExplanation(
             Icons.Outlined.Mic,

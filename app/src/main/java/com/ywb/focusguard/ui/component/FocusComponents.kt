@@ -43,6 +43,7 @@ import com.ywb.focusguard.ui.theme.FocusTealSoft
 fun FocusPageHeader(
     title: String,
     subtitle: String? = null,
+    leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null
 ) {
     Row(
@@ -50,6 +51,9 @@ fun FocusPageHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Top
     ) {
+        leading?.let {
+            Box(modifier = Modifier.padding(end = 6.dp)) { it() }
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(text = title, style = MaterialTheme.typography.headlineLarge)
             if (subtitle != null) {

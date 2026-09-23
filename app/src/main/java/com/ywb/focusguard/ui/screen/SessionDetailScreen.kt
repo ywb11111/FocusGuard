@@ -79,7 +79,7 @@ private fun SessionDetailContent(uiState: SessionDetailUiState.Content, onBack: 
         FocusPageHeader(
             title = "专注详情",
             subtitle = detailDateText(uiState.startedAt),
-            trailing = {
+            leading = {
                 IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
                 }
@@ -176,8 +176,14 @@ private fun DetailChart(
 @Composable
 private fun SessionDetailMessage(message: String, onBack: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回") }
-        Text("专注详情", style = MaterialTheme.typography.headlineSmall)
+        FocusPageHeader(
+            title = "专注详情",
+            leading = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
+                }
+            }
+        )
         Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
