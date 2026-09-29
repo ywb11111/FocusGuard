@@ -1,5 +1,8 @@
 package com.ywb.focusguard.ui.component
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +26,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -30,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -37,6 +44,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ywb.focusguard.ui.theme.FocusBlueSoft
 import com.ywb.focusguard.ui.theme.FocusTealSoft
+import kotlin.math.roundToInt
 
 /** 页面统一标题，避免各 Screen 重复定义互不一致的顶部留白与层级。 */
 @Composable
@@ -78,6 +86,17 @@ fun EnvironmentScoreGauge(
 ) {
     val track = MaterialTheme.colorScheme.surfaceVariant
     val indicator = MaterialTheme.colorScheme.primary
+    val inspectionMode = LocalInspectionMode.current
+    val animatedScore = remember {
+        Animatable(if (inspectionMode) score.toFloat() else 0f)
+    }
+    LaunchedEffect(score) {
+        if (inspectionMode) {
+            animatedScore.snapTo(score.toFloat())
+        } else {
+            animatedScore.animateTo(score.toFloat(), animationSpec = tween(durationMillis = 700))
+        }
+    }
     Box(
         modifier = modifier
             .size(size)
@@ -92,7 +111,7 @@ fun EnvironmentScoreGauge(
             drawArc(
                 color = indicator,
                 startAngle = -90f,
-                sweepAngle = 360f * (score.coerceIn(0, 100) / 100f),
+                sweepAngle = 360f * (animatedScore.value.coerceIn(0f, 100f) / 100f),
                 useCenter = false,
                 topLeft = Offset(center.x - radius, center.y - radius),
                 size = androidx.compose.ui.geometry.Size(radius * 2f, radius * 2f),
@@ -100,7 +119,7 @@ fun EnvironmentScoreGauge(
             )
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = score.toString(), style = MaterialTheme.typography.displayMedium)
+            Text(text = animatedScore.value.roundToInt().toString(), style = MaterialTheme.typography.displayMedium)
             Text(
                 text = "环境评分",
                 style = MaterialTheme.typography.labelMedium,
@@ -125,6 +144,21 @@ fun EnvironmentMetricRow(
     healthy: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val iconContainerColor by animateColorAsState(
+        targetValue = if (healthy) FocusTealSoft else FocusBlueSoft,
+        animationSpec = tween(durationMillis = 180),
+        label = "environment-icon-container"
+    )
+    val iconColor by animateColorAsState(
+        targetValue = if (healthy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+        animationSpec = tween(durationMillis = 180),
+        label = "environment-icon"
+    )
+    val statusColor by animateColorAsState(
+        targetValue = if (healthy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+        animationSpec = tween(durationMillis = 180),
+        label = "environment-status"
+    )
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -134,13 +168,13 @@ fun EnvironmentMetricRow(
         Surface(
             modifier = Modifier.size(46.dp),
             shape = CircleShape,
-            color = if (healthy) FocusTealSoft else FocusBlueSoft
+            color = iconContainerColor
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (healthy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                    tint = iconColor
                 )
             }
         }
@@ -153,7 +187,7 @@ fun EnvironmentMetricRow(
             Text(
                 text = status,
                 style = MaterialTheme.typography.titleMedium,
-                color = if (healthy) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+                color = statusColor
             )
             Text(
                 text = detail,
