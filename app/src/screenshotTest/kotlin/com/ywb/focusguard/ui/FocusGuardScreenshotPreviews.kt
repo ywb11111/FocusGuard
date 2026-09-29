@@ -60,7 +60,9 @@ fun TodayScreenshotPreview() {
                     ),
                     onStartFocus = {},
                     onOpenSettings = {},
-                    onOpenSessionDetail = {}
+                    onOpenSessionDetail = {},
+                    dateText = "9月11日 星期五",
+                    greeting = "下午好"
                 )
             }
         }

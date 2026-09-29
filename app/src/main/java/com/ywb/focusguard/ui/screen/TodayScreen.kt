@@ -102,7 +102,9 @@ fun TodayScreen(
     onOpenSettings: () -> Unit,
     onOpenSessionDetail: (Long) -> Unit,
     onRequestAudioPermission: () -> Unit = {},
-    onRequestNotificationPermission: () -> Unit = {}
+    onRequestNotificationPermission: () -> Unit = {},
+    dateText: String = todayDateText(),
+    greeting: String = greetingText()
 ) {
     val environment = uiState.environment
     val analyzer = EnvironmentAnalyzer()
@@ -119,10 +121,10 @@ fun TodayScreen(
     ) {
         FocusPageHeader(
             title = "今日",
-            subtitle = todayDateText(),
+            subtitle = dateText,
             trailing = {
                 Text(
-                    text = greetingText(),
+                    text = greeting,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
