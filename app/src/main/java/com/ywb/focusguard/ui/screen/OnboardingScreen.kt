@@ -1,5 +1,14 @@
 package com.ywb.focusguard.ui.screen
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,7 +79,11 @@ fun OnboardingScreen(onComplete: () -> Unit = {}) {
         )
     )
     var pageIndex by remember { mutableIntStateOf(0) }
-    val page = pages[pageIndex]
+    val progress by animateFloatAsState(
+        targetValue = (pageIndex + 1) / pages.size.toFloat(),
+        animationSpec = tween(durationMillis = 240),
+        label = "onboarding-progress"
+    )
 
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp),
@@ -81,27 +94,43 @@ fun OnboardingScreen(onComplete: () -> Unit = {}) {
             TextButton(onClick = onComplete) { Text("跳过") }
         }
         LinearProgressIndicator(
-            progress = { (pageIndex + 1) / pages.size.toFloat() },
+            progress = { progress },
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
         Spacer(Modifier.weight(1f))
-        Surface(shape = CircleShape, color = FocusTealSoft, modifier = Modifier.size(112.dp)) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(page.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(50.dp))
+        AnimatedContent(
+            targetState = pageIndex,
+            transitionSpec = {
+                val direction = if (targetState > initialState) 1 else -1
+                (slideInHorizontally(tween(240)) { width -> direction * width / 3 } +
+                    fadeIn(tween(180))) togetherWith
+                    (slideOutHorizontally(tween(200)) { width -> -direction * width / 3 } +
+                        fadeOut(tween(140))) using SizeTransform(clip = false)
+            },
+            contentAlignment = Alignment.Center,
+            label = "onboarding-page"
+        ) { index ->
+            val page = pages[index]
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Surface(shape = CircleShape, color = FocusTealSoft, modifier = Modifier.size(112.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(page.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(50.dp))
+                    }
+                }
+                Spacer(Modifier.height(30.dp))
+                Text(page.eyebrow, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.height(10.dp))
+                Text(page.title, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    page.body,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
             }
         }
-        Spacer(Modifier.height(30.dp))
-        Text(page.eyebrow, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(10.dp))
-        Text(page.title, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(14.dp))
-        Text(
-            page.body,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
         Spacer(Modifier.weight(1.2f))
         Button(
             onClick = {
