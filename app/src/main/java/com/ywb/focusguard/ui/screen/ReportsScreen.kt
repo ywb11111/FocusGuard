@@ -45,7 +45,7 @@ import com.ywb.focusguard.domain.model.FocusSession
 import com.ywb.focusguard.ui.component.FocusPageHeader
 import com.ywb.focusguard.ui.component.FocusStat
 import com.ywb.focusguard.ui.component.SectionHeader
-import com.ywb.focusguard.ui.component.SimpleLineChart
+import com.ywb.focusguard.ui.component.InteractiveLineChart
 import com.ywb.focusguard.ui.state.ReportPeriod
 import com.ywb.focusguard.ui.state.ReportsUiState
 import com.ywb.focusguard.ui.state.FocusCategorySummary
@@ -96,7 +96,6 @@ fun ReportsScreen(
         } else {
             item { SummaryHero(uiState) }
             item { InsightCard(uiState) }
-            item { CategoryBreakdown(uiState.categorySummaries) }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SectionHeader(title = "评分趋势", action = {
@@ -107,15 +106,12 @@ fun ReportsScreen(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            SimpleLineChart(values = uiState.trendValues)
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("较早", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("最近", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+                            InteractiveLineChart(values = uiState.trendValues)
                         }
                     }
                 }
             }
+            item { CategoryBreakdown(uiState.categorySummaries) }
             item { EnvironmentAverages(uiState) }
             item { SectionHeader(title = "专注记录", action = {
                 Text("${uiState.sessions.size} 次", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
