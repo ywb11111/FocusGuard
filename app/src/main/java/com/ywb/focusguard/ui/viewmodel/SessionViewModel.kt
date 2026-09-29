@@ -8,6 +8,7 @@ import com.ywb.focusguard.data.repository.FocusRepository
 import com.ywb.focusguard.data.repository.SettingsRepository
 import com.ywb.focusguard.domain.model.EnvironmentSnapshot
 import com.ywb.focusguard.domain.model.FocusConfig
+import com.ywb.focusguard.domain.model.FocusCategory
 import com.ywb.focusguard.domain.model.LightLevel
 import com.ywb.focusguard.domain.model.LightSample
 import com.ywb.focusguard.domain.model.MotionSample
@@ -57,6 +58,9 @@ class SessionViewModel @Inject constructor(
     /** 本次已开始会话的目标时长，单位毫秒。 */
     private var targetDurationMillis = selectedDurationMinutes * 60 * 1000L
 
+    /** 当前准备页选择的专注用途。 */
+    private var selectedCategory = FocusCategory.STUDY
+
     /** 用户或桌面入口明确选择后，不再被异步加载的默认设置覆盖。 */
     private var hasExplicitDurationSelection = false
 
@@ -74,7 +78,10 @@ class SessionViewModel @Inject constructor(
 
     /** ViewModel 内部可修改的专注状态源。 */
     private val _uiState = MutableStateFlow<SessionUiState>(
-        SessionUiState.Ready(FocusConfig(selectedDurationMinutes), null)
+        SessionUiState.Ready(
+            FocusConfig(selectedDurationMinutes, category = selectedCategory),
+            null
+        )
     )
     val uiState: StateFlow<SessionUiState> = _uiState.asStateFlow()
 
@@ -146,7 +153,7 @@ class SessionViewModel @Inject constructor(
         val now = System.currentTimeMillis()
         viewModelScope.launch {
             val config = (_uiState.value as? SessionUiState.Ready)?.config
-                ?: FocusConfig(selectedDurationMinutes)
+                ?: FocusConfig(selectedDurationMinutes, category = selectedCategory)
             targetDurationMillis = config.durationMinutes * 60 * 1000L
             activeSessionId = focusRepository.startSession(config)
             runStartedAt = now
@@ -171,6 +178,18 @@ class SessionViewModel @Inject constructor(
             if (current is SessionUiState.Ready) {
                 selectedDurationMinutes = minutes
                 current.copy(config = current.config.copy(durationMinutes = minutes))
+            } else {
+                current
+            }
+        }
+    }
+
+    /** 为本次专注选择用途标签，不修改全局设置。 */
+    fun selectCategory(category: FocusCategory) {
+        selectedCategory = category
+        _uiState.update { current ->
+            if (current is SessionUiState.Ready) {
+                current.copy(config = current.config.copy(category = category))
             } else {
                 current
             }
@@ -244,7 +263,10 @@ class SessionViewModel @Inject constructor(
         runStartedAt = 0L
         accumulatedMillis = 0L
         movementCount = 0
-        _uiState.value = SessionUiState.Ready(FocusConfig(selectedDurationMinutes), environment.value)
+        _uiState.value = SessionUiState.Ready(
+            FocusConfig(selectedDurationMinutes, category = selectedCategory),
+            environment.value
+        )
     }
 
     /** 启动计时器：每秒更新一次。 */

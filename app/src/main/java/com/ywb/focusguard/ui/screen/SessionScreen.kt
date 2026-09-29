@@ -41,6 +41,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -66,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ywb.focusguard.domain.model.EnvironmentSnapshot
+import com.ywb.focusguard.domain.model.FocusCategory
 import com.ywb.focusguard.domain.model.LightLevel
 import com.ywb.focusguard.domain.model.NoiseLevel
 import com.ywb.focusguard.ui.component.EnvironmentMetricRow
@@ -95,6 +97,7 @@ fun SessionRoute(
         uiState = uiState,
         onStart = viewModel::startSession,
         onSelectDuration = viewModel::selectDuration,
+        onSelectCategory = viewModel::selectCategory,
         onPause = viewModel::pauseSession,
         onResume = viewModel::resumeSession,
         onFinish = viewModel::finishSession,
@@ -109,6 +112,7 @@ fun SessionScreen(
     uiState: SessionUiState,
     onStart: () -> Unit,
     onSelectDuration: (Int) -> Unit,
+    onSelectCategory: (FocusCategory) -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onFinish: () -> Unit,
@@ -126,7 +130,7 @@ fun SessionScreen(
             SessionUiState.Idle -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
-            is SessionUiState.Ready -> ReadySessionContent(state, onStart, onSelectDuration)
+            is SessionUiState.Ready -> ReadySessionContent(state, onStart, onSelectDuration, onSelectCategory)
             is SessionUiState.Running -> RunningSessionContent(state, onPause, onFinish)
             is SessionUiState.Paused -> PausedSessionContent(state, onResume, onFinish)
             is SessionUiState.Finished -> FinishedSessionContent(state, onReset, onOpenDetail)
@@ -139,7 +143,8 @@ fun SessionScreen(
 private fun ReadySessionContent(
     uiState: SessionUiState.Ready,
     onStart: () -> Unit,
-    onSelectDuration: (Int) -> Unit
+    onSelectDuration: (Int) -> Unit,
+    onSelectCategory: (FocusCategory) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -196,6 +201,22 @@ private fun ReadySessionContent(
                             Text("分钟", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
+                }
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SectionHeader(title = "专注类型")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FocusCategory.entries.forEach { category ->
+                    FilterChip(
+                        selected = uiState.config.category == category,
+                        onClick = { onSelectCategory(category) },
+                        label = { Text(category.label) }
+                    )
                 }
             }
         }

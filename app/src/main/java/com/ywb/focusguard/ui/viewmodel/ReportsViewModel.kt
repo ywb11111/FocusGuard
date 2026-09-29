@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ywb.focusguard.data.repository.FocusRepository
 import com.ywb.focusguard.domain.model.FocusSession
+import com.ywb.focusguard.domain.model.FocusCategory
+import com.ywb.focusguard.ui.state.FocusCategorySummary
 import com.ywb.focusguard.ui.state.PeriodSummary
 import com.ywb.focusguard.ui.state.ReportPeriod
 import com.ywb.focusguard.ui.state.ReportsUiState
@@ -102,7 +104,22 @@ class ReportsViewModel @Inject constructor(
                 averageLightLux = avgLight,
                 totalMovementCount = totalMovement
             ),
-            trendValues = sessions.reversed().map { it.score.toFloat() }
+            trendValues = sessions.reversed().map { it.score.toFloat() },
+            categorySummaries = buildCategorySummaries(sessions)
         )
     }
 }
+
+/** 旧记录没有标准标签时统一归入“其他”，避免历史自由文本把报告切得过碎。 */
+internal fun buildCategorySummaries(sessions: List<FocusSession>): List<FocusCategorySummary> =
+    sessions
+        .groupBy { FocusCategory.fromLabel(it.note).label }
+        .map { (label, items) ->
+            FocusCategorySummary(
+                label = label,
+                totalFocusMillis = items.sumOf { it.durationMillis },
+                sessionCount = items.size,
+                averageScore = items.map { it.score }.average().toInt()
+            )
+        }
+        .sortedByDescending { it.totalFocusMillis }

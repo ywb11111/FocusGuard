@@ -132,6 +132,14 @@ data class PeriodSummary(
     val totalMovementCount: Int = 0
 )
 
+/** 一类专注任务在当前报告周期内的聚合结果。 */
+data class FocusCategorySummary(
+    val label: String,
+    val totalFocusMillis: Long,
+    val sessionCount: Int,
+    val averageScore: Int
+)
+
 /**
  * 报告页状态。
  *
@@ -139,12 +147,14 @@ data class PeriodSummary(
  * @property sessions 当前周期内的已完成会话，按时间倒序。
  * @property periodSummary 当前周期的聚合统计。
  * @property trendValues 趋势图数据（各会话评分）。
+ * @property categorySummaries 按专注用途聚合并按总时长降序排列的数据。
  */
 data class ReportsUiState(
     val period: ReportPeriod = ReportPeriod.WEEK,
     val sessions: List<FocusSession> = emptyList(),
     val periodSummary: PeriodSummary = PeriodSummary(),
-    val trendValues: List<Float> = emptyList()
+    val trendValues: List<Float> = emptyList(),
+    val categorySummaries: List<FocusCategorySummary> = emptyList()
 )
 
 /**

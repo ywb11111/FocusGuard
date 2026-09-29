@@ -144,7 +144,7 @@ class FocusRepositoryImpl @Inject constructor(
                 movementCount = 0,
                 distractionCount = 0,
                 score = 0,
-                note = "进行中"
+                note = config.category.label
             )
         )
     }
@@ -154,6 +154,7 @@ class FocusRepositoryImpl @Inject constructor(
         val finishedAt = System.currentTimeMillis()
         val existing = focusSessionDao.getSession(sessionId)
         val startedAt = existing?.startTime ?: finishedAt
+        val categoryLabel = existing?.note?.takeIf { it.isNotBlank() } ?: "其他"
 
         // 从采样表聚合统计数据
         val noiseSamples = sampleDao.getNoiseSamplesOnce(sessionId)
@@ -194,7 +195,7 @@ class FocusRepositoryImpl @Inject constructor(
             movementCount = movementCount,
             distractionCount = 0,
             score = score.total,
-            note = "手动结束"
+            note = categoryLabel
         )
 
         return FocusSession(
@@ -208,7 +209,7 @@ class FocusRepositoryImpl @Inject constructor(
             movementCount = movementCount,
             distractionCount = 0,
             score = score.total,
-            note = "手动结束"
+            note = categoryLabel
         )
     }
 

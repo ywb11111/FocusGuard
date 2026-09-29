@@ -29,6 +29,19 @@ data class FocusSession(
     val note: String?
 )
 
+/** 用户为一次专注选择的用途，用于在报告中比较不同任务类型。 */
+enum class FocusCategory(val label: String) {
+    STUDY("学习"),
+    CODING("编程"),
+    READING("阅读"),
+    OTHER("其他");
+
+    companion object {
+        fun fromLabel(label: String?): FocusCategory =
+            entries.firstOrNull { it.label == label } ?: OTHER
+    }
+}
+
 /**
  * 开始专注时使用的配置。
  *
@@ -36,12 +49,14 @@ data class FocusSession(
  * @property monitorNoise 是否采集噪声。
  * @property monitorLight 是否采集光照。
  * @property monitorMotion 是否检测移动。
+ * @property category 本次专注的用途标签。
  */
 data class FocusConfig(
     val durationMinutes: Int,
     val monitorNoise: Boolean = true,
     val monitorLight: Boolean = true,
-    val monitorMotion: Boolean = true
+    val monitorMotion: Boolean = true,
+    val category: FocusCategory = FocusCategory.STUDY
 )
 
 /**

@@ -48,6 +48,7 @@ import com.ywb.focusguard.ui.component.SectionHeader
 import com.ywb.focusguard.ui.component.SimpleLineChart
 import com.ywb.focusguard.ui.state.ReportPeriod
 import com.ywb.focusguard.ui.state.ReportsUiState
+import com.ywb.focusguard.ui.state.FocusCategorySummary
 import com.ywb.focusguard.ui.theme.FocusBlueSoft
 import com.ywb.focusguard.ui.theme.FocusTealSoft
 import com.ywb.focusguard.ui.viewmodel.ReportsViewModel
@@ -95,6 +96,7 @@ fun ReportsScreen(
         } else {
             item { SummaryHero(uiState) }
             item { InsightCard(uiState) }
+            item { CategoryBreakdown(uiState.categorySummaries) }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SectionHeader(title = "评分趋势", action = {
@@ -138,6 +140,55 @@ fun ReportsScreen(
             }
         }
         item { Spacer(Modifier.size(4.dp)) }
+    }
+}
+
+@Composable
+private fun CategoryBreakdown(summaries: List<FocusCategorySummary>) {
+    if (summaries.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SectionHeader(title = "专注类型", action = {
+            Text("按总时长", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        })
+        Card(
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                summaries.forEachIndexed { index, summary ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(shape = CircleShape, color = FocusTealSoft, modifier = Modifier.size(40.dp)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    summary.label.take(1),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(summary.label, style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                "${summary.sessionCount} 次 · 平均 ${summary.averageScore} 分",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            formatDurationCompact(summary.totalFocusMillis),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                    if (index != summaries.lastIndex) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                }
+            }
+        }
     }
 }
 

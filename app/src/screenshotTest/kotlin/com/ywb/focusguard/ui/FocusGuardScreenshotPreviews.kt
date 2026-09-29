@@ -24,6 +24,7 @@ import com.ywb.focusguard.ui.screen.SessionScreen
 import com.ywb.focusguard.ui.screen.SettingsScreen
 import com.ywb.focusguard.ui.screen.TodayScreen
 import com.ywb.focusguard.ui.state.PeriodSummary
+import com.ywb.focusguard.ui.state.FocusCategorySummary
 import com.ywb.focusguard.ui.state.ReportPeriod
 import com.ywb.focusguard.ui.state.ReportsUiState
 import com.ywb.focusguard.ui.state.SessionUiState
@@ -39,9 +40,9 @@ private val previewEnvironment = EnvironmentSnapshot(
 )
 
 private val previewSessions = listOf(
-    FocusSession(3L, 1_786_083_600_000L, 1_786_086_300_000L, 2_700_000L, 38f, 52f, 285f, 0, 0, 92, "算法练习"),
-    FocusSession(2L, 1_785_997_800_000L, 1_786_000_500_000L, 2_700_000L, 44f, 61f, 240f, 1, 0, 86, "阅读 Compose"),
-    FocusSession(1L, 1_785_911_400_000L, 1_785_912_900_000L, 1_500_000L, 51f, 68f, 180f, 2, 0, 78, "课程复习")
+    FocusSession(3L, 1_786_083_600_000L, 1_786_086_300_000L, 2_700_000L, 38f, 52f, 285f, 0, 0, 92, "编程"),
+    FocusSession(2L, 1_785_997_800_000L, 1_786_000_500_000L, 2_700_000L, 44f, 61f, 240f, 1, 0, 86, "阅读"),
+    FocusSession(1L, 1_785_911_400_000L, 1_785_912_900_000L, 1_500_000L, 51f, 68f, 180f, 2, 0, 78, "学习")
 )
 
 @PreviewTest
@@ -78,6 +79,7 @@ fun SessionReadyScreenshotPreview() {
             uiState = SessionUiState.Ready(FocusConfig(25), previewEnvironment),
             onStart = {},
             onSelectDuration = {},
+            onSelectCategory = {},
             onPause = {},
             onResume = {},
             onFinish = {},
@@ -103,6 +105,7 @@ fun SessionRunningScreenshotPreview() {
             ),
             onStart = {},
             onSelectDuration = {},
+            onSelectCategory = {},
             onPause = {},
             onResume = {},
             onFinish = {},
@@ -124,7 +127,12 @@ fun ReportsScreenshotPreview() {
                         period = ReportPeriod.WEEK,
                         sessions = previewSessions,
                         periodSummary = PeriodSummary(6_900_000L, 85, 3, 44f, 235f, 3),
-                        trendValues = listOf(78f, 86f, 92f)
+                        trendValues = listOf(78f, 86f, 92f),
+                        categorySummaries = listOf(
+                            FocusCategorySummary("编程", 2_700_000L, 1, 92),
+                            FocusCategorySummary("阅读", 2_700_000L, 1, 86),
+                            FocusCategorySummary("学习", 1_500_000L, 1, 78)
+                        )
                     ),
                     onOpenSessionDetail = {}
                 )
