@@ -84,9 +84,13 @@ import kotlin.math.roundToInt
 @Composable
 fun SessionRoute(
     onFinish: (Long) -> Unit,
+    initialDurationMinutes: Int? = null,
     viewModel: SessionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(initialDurationMinutes) {
+        initialDurationMinutes?.let(viewModel::selectDuration)
+    }
     SessionScreen(
         uiState = uiState,
         onStart = viewModel::startSession,

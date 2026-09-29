@@ -97,6 +97,18 @@ fun FocusGuardNavHost(
             )
         }
         composable(
+            route = Destination.SessionQuickStart.route,
+            arguments = listOf(navArgument(Destination.SessionQuickStart.ARG_DURATION_MINUTES) {
+                type = NavType.IntType
+            })
+        ) { entry ->
+            SessionRoute(
+                initialDurationMinutes = entry.arguments
+                    ?.getInt(Destination.SessionQuickStart.ARG_DURATION_MINUTES),
+                onFinish = { id -> navController.navigate(Destination.SessionDetail.createRoute(id)) }
+            )
+        }
+        composable(
             route = Destination.Reports.route
         ) {
             ReportsRoute(

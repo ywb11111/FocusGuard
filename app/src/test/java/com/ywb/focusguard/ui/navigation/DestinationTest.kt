@@ -17,6 +17,12 @@ class DestinationTest {
     }
 
     @Test
+    fun `桌面入口时长会限制在合法范围`() {
+        assertEquals("session/prepare/25", Destination.SessionQuickStart.createRoute(25))
+        assertEquals("session/prepare/180", Destination.SessionQuickStart.createRoute(999))
+    }
+
+    @Test
     fun `底部导航页面之间使用顶层转场`() {
         assertEquals(
             true,

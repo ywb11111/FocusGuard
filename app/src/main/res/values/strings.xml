@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">FocusGuard</string>
+    <string name="widget_description">快速进入 25 分钟专注准备</string>
+    <string name="shortcut_focus_25">专注 25 分钟</string>
+    <string name="shortcut_focus_25_long">准备一段 25 分钟专注</string>
+    <string name="shortcut_focus_45">专注 45 分钟</string>
+    <string name="shortcut_focus_45_long">准备一段 45 分钟专注</string>
 </resources>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="focus_25"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutLongLabel="@string/shortcut_focus_25_long"
+        android:shortcutShortLabel="@string/shortcut_focus_25">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="focusguard://session?duration=25"
+            android:targetClass="com.ywb.focusguard.MainActivity"
+            android:targetPackage="com.ywb.focusguard" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="focus_45"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutLongLabel="@string/shortcut_focus_45_long"
+        android:shortcutShortLabel="@string/shortcut_focus_45">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="focusguard://session?duration=45"
+            android:targetClass="com.ywb.focusguard.MainActivity"
+            android:targetPackage="com.ywb.focusguard" />
+    </shortcut>
+</shortcuts>

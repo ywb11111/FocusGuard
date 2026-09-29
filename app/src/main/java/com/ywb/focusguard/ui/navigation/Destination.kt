@@ -14,6 +14,14 @@ sealed class Destination(val route: String) {
     /** 专注计时顶层页面。 */
     data object Session : Destination("session")
 
+    /** 桌面小组件与应用快捷方式进入的预设时长准备页。 */
+    data object SessionQuickStart : Destination("session/prepare/{durationMinutes}") {
+        const val ARG_DURATION_MINUTES = "durationMinutes"
+
+        fun createRoute(durationMinutes: Int): String =
+            "session/prepare/${durationMinutes.coerceIn(1, 180)}"
+    }
+
     /** 历史报告顶层页面。 */
     data object Reports : Destination("reports")
 

@@ -57,6 +57,9 @@ class SessionViewModel @Inject constructor(
     /** 本次已开始会话的目标时长，单位毫秒。 */
     private var targetDurationMillis = selectedDurationMinutes * 60 * 1000L
 
+    /** 用户或桌面入口明确选择后，不再被异步加载的默认设置覆盖。 */
+    private var hasExplicitDurationSelection = false
+
     /** 采样间隔：每 10 秒保存一次光照数据。 */
     private val sampleIntervalMillis = 10_000L
 
@@ -104,7 +107,7 @@ class SessionViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
                 _uiState.update { current ->
-                    if (current is SessionUiState.Ready) {
+                    if (current is SessionUiState.Ready && !hasExplicitDurationSelection) {
                         selectedDurationMinutes = settings.defaultFocusMinutes
                         current.copy(config = current.config.copy(durationMinutes = selectedDurationMinutes))
                     } else {
@@ -163,6 +166,7 @@ class SessionViewModel @Inject constructor(
     /** 为当前尚未开始的会话选择时长，避免把一次性选择强行写回全局设置。 */
     fun selectDuration(minutes: Int) {
         if (minutes !in 1..180) return
+        hasExplicitDurationSelection = true
         _uiState.update { current ->
             if (current is SessionUiState.Ready) {
                 selectedDurationMinutes = minutes

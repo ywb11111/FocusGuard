@@ -11,6 +11,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,6 +22,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.ywb.focusguard.ui.navigation.Destination
 import com.ywb.focusguard.ui.navigation.FocusGuardNavHost
+import com.ywb.focusguard.ui.navigation.QuickStartRequest
 import com.ywb.focusguard.ui.navigation.topLevelDestinations
 import com.ywb.focusguard.ui.screen.OnboardingScreen
 import com.ywb.focusguard.ui.viewmodel.AppViewModel
@@ -30,7 +32,10 @@ import com.ywb.focusguard.ui.viewmodel.AppViewModel
  * 具体页面内容交给 [FocusGuardNavHost]，避免每个 Screen 自己管理顶层导航。
  */
 @Composable
-fun FocusGuardApp(viewModel: AppViewModel = hiltViewModel()) {
+fun FocusGuardApp(
+    quickStartRequest: QuickStartRequest? = null,
+    viewModel: AppViewModel = hiltViewModel()
+) {
     val onboardingCompleted by viewModel.onboardingCompleted.collectAsStateWithLifecycle()
     if (onboardingCompleted == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -57,6 +62,14 @@ fun FocusGuardApp(viewModel: AppViewModel = hiltViewModel()) {
             }
             launchSingleTop = true
             restoreState = true
+        }
+    }
+
+    LaunchedEffect(quickStartRequest?.requestId) {
+        quickStartRequest?.let { request ->
+            navController.navigate(Destination.SessionQuickStart.createRoute(request.durationMinutes)) {
+                launchSingleTop = true
+            }
         }
     }
 
