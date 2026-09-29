@@ -2,6 +2,12 @@ package com.ywb.focusguard.ui.screen
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -43,11 +49,18 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -65,6 +78,7 @@ import com.ywb.focusguard.ui.state.visualPhase
 import com.ywb.focusguard.ui.theme.FocusAmberSoft
 import com.ywb.focusguard.ui.theme.FocusTealSoft
 import com.ywb.focusguard.ui.viewmodel.SessionViewModel
+import kotlin.math.roundToInt
 
 /** 专注流程路由：把状态机方法转换为 UI 事件。 */
 @Composable
@@ -143,14 +157,28 @@ private fun ReadySessionContent(
             ) {
                 listOf(25, 45, 60).forEach { minutes ->
                     val selected = uiState.config.durationMinutes == minutes
+                    val containerColor by animateColorAsState(
+                        targetValue = if (selected) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            androidx.compose.ui.graphics.Color.Transparent
+                        },
+                        animationSpec = tween(durationMillis = 180),
+                        label = "duration-container"
+                    )
+                    val elevation by animateDpAsState(
+                        targetValue = if (selected) 2.dp else 0.dp,
+                        animationSpec = tween(durationMillis = 180),
+                        label = "duration-elevation"
+                    )
                     Surface(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(12.dp))
                             .clickable { onSelectDuration(minutes) },
                         shape = RoundedCornerShape(12.dp),
-                        color = if (selected) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent,
-                        tonalElevation = if (selected) 2.dp else 0.dp
+                        color = containerColor,
+                        tonalElevation = elevation
                     ) {
                         Column(
                             modifier = Modifier.padding(vertical = 14.dp),
@@ -213,6 +241,11 @@ private fun RunningSessionContent(
 ) {
     val total = uiState.elapsedMillis + (uiState.remainingMillis ?: 0L)
     val progress = if (total > 0L) uiState.elapsedMillis.toFloat() / total else 0f
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 900, easing = LinearEasing),
+        label = "session-progress"
+    )
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -224,7 +257,7 @@ private fun RunningSessionContent(
         Spacer(Modifier.weight(0.8f))
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(250.dp)) {
             CircularProgressIndicator(
-                progress = { progress.coerceIn(0f, 1f) },
+                progress = { animatedProgress },
                 modifier = Modifier.fillMaxSize(),
                 strokeWidth = 12.dp,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant
@@ -303,6 +336,20 @@ private fun FinishedSessionContent(
     onOpenDetail: (Long) -> Unit
 ) {
     val session = uiState.session
+    val inspectionMode = LocalInspectionMode.current
+    val hapticFeedback = LocalHapticFeedback.current
+    val animatedScore = remember(session.id) {
+        Animatable(if (inspectionMode) session.score.toFloat() else 0f)
+    }
+    LaunchedEffect(session.id) {
+        if (!inspectionMode) {
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+            animatedScore.animateTo(
+                targetValue = session.score.toFloat(),
+                animationSpec = tween(durationMillis = 650)
+            )
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -323,7 +370,7 @@ private fun FinishedSessionContent(
             ) {
                 Column {
                     Text("本次评分", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(session.score.toString(), style = MaterialTheme.typography.displayMedium)
+                    Text(animatedScore.value.roundToInt().toString(), style = MaterialTheme.typography.displayMedium)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     PositiveStatus(if (session.score >= 80) "表现稳定" else "已完成")
@@ -432,13 +479,21 @@ private fun LiveMetric(icon: ImageVector, value: String, label: String) {
 
 @Composable
 private fun ScoreBar(label: String, value: Float, trailing: String) {
+    val inspectionMode = LocalInspectionMode.current
+    var revealed by remember(value) { mutableStateOf(inspectionMode) }
+    val animatedValue by animateFloatAsState(
+        targetValue = if (revealed) value.coerceIn(0f, 1f) else 0f,
+        animationSpec = tween(durationMillis = 550),
+        label = "score-bar"
+    )
+    LaunchedEffect(value) { revealed = true }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(label, style = MaterialTheme.typography.bodyMedium)
             Text(trailing, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         LinearProgressIndicator(
-            progress = { value.coerceIn(0f, 1f) },
+            progress = { animatedValue },
             modifier = Modifier.fillMaxWidth().height(7.dp).clip(CircleShape),
             trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
