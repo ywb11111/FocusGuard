@@ -15,4 +15,24 @@ class DestinationTest {
     fun `专注详情页 route 能按 sessionId 生成`() {
         assertEquals("session_detail/42", Destination.SessionDetail.createRoute(42L))
     }
+
+    @Test
+    fun `底部导航页面之间使用顶层转场`() {
+        assertEquals(
+            true,
+            isTopLevelTransition(Destination.Today.route, Destination.Reports.route)
+        )
+    }
+
+    @Test
+    fun `进入沉浸任务或详情页不使用顶层转场`() {
+        assertEquals(
+            false,
+            isTopLevelTransition(Destination.Today.route, Destination.Session.route)
+        )
+        assertEquals(
+            false,
+            isTopLevelTransition(Destination.Reports.route, Destination.SessionDetail.route)
+        )
+    }
 }

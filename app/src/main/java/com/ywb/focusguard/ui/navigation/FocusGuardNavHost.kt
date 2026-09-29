@@ -1,6 +1,8 @@
 package com.ywb.focusguard.ui.navigation
 
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -18,6 +20,16 @@ import com.ywb.focusguard.ui.screen.SessionDetailRoute
 import com.ywb.focusguard.ui.screen.SessionRoute
 import com.ywb.focusguard.ui.screen.SettingsRoute
 import com.ywb.focusguard.ui.screen.TodayRoute
+
+private const val TOP_LEVEL_ENTER_DURATION_MILLIS = 160
+private const val TOP_LEVEL_EXIT_DURATION_MILLIS = 120
+private const val DETAIL_TRANSITION_DURATION_MILLIS = 240
+
+/** 只有底部导航之间切换时使用轻量淡入淡出，沉浸任务和详情页保留方向感。 */
+internal fun isTopLevelTransition(initialRoute: String?, targetRoute: String?): Boolean {
+    val topLevelRoutes = topLevelDestinations.mapTo(mutableSetOf()) { it.destination.route }
+    return initialRoute in topLevelRoutes && targetRoute in topLevelRoutes
+}
 
 /**
  * FocusGuard 的导航图，负责把 route 映射到 Route Composable，并集中处理页面跳转。
@@ -38,32 +50,32 @@ fun FocusGuardNavHost(
         startDestination = Destination.Today.route,
         modifier = modifier,
         enterTransition = {
-            // 页面进入动画：从右侧滑入 + 淡入，持续 300ms
-            slideIntoContainer(
-                AnimatedContentTransitionScope.SlideDirection.Left,
-                animationSpec = tween(300)
-            ) + fadeIn(animationSpec = tween(300))
+            if (isTopLevelTransition(initialState.destination.route, targetState.destination.route)) {
+                topLevelEnterTransition()
+            } else {
+                detailEnterTransition(AnimatedContentTransitionScope.SlideDirection.Left)
+            }
         },
         exitTransition = {
-            // 页面退出动画：向左滑出 + 淡出，持续 300ms
-            slideOutOfContainer(
-                AnimatedContentTransitionScope.SlideDirection.Left,
-                animationSpec = tween(300)
-            ) + fadeOut(animationSpec = tween(300))
+            if (isTopLevelTransition(initialState.destination.route, targetState.destination.route)) {
+                topLevelExitTransition()
+            } else {
+                detailExitTransition(AnimatedContentTransitionScope.SlideDirection.Left)
+            }
         },
         popEnterTransition = {
-            // 返回时页面进入动画：从左侧滑入 + 淡入，持续 300ms
-            slideIntoContainer(
-                AnimatedContentTransitionScope.SlideDirection.Right,
-                animationSpec = tween(300)
-            ) + fadeIn(animationSpec = tween(300))
+            if (isTopLevelTransition(initialState.destination.route, targetState.destination.route)) {
+                topLevelEnterTransition()
+            } else {
+                detailEnterTransition(AnimatedContentTransitionScope.SlideDirection.Right)
+            }
         },
         popExitTransition = {
-            // 返回时页面退出动画：向右滑出 + 淡出，持续 300ms
-            slideOutOfContainer(
-                AnimatedContentTransitionScope.SlideDirection.Right,
-                animationSpec = tween(300)
-            ) + fadeOut(animationSpec = tween(300))
+            if (isTopLevelTransition(initialState.destination.route, targetState.destination.route)) {
+                topLevelExitTransition()
+            } else {
+                detailExitTransition(AnimatedContentTransitionScope.SlideDirection.Right)
+            }
         }
     ) {
         composable(
@@ -117,3 +129,23 @@ fun FocusGuardNavHost(
         }
     }
 }
+
+private fun topLevelEnterTransition(): EnterTransition =
+    fadeIn(animationSpec = tween(TOP_LEVEL_ENTER_DURATION_MILLIS))
+
+private fun topLevelExitTransition(): ExitTransition =
+    fadeOut(animationSpec = tween(TOP_LEVEL_EXIT_DURATION_MILLIS))
+
+private fun AnimatedContentTransitionScope<*>.detailEnterTransition(
+    direction: AnimatedContentTransitionScope.SlideDirection
+): EnterTransition = slideIntoContainer(
+    direction,
+    animationSpec = tween(DETAIL_TRANSITION_DURATION_MILLIS)
+) + fadeIn(animationSpec = tween(TOP_LEVEL_ENTER_DURATION_MILLIS))
+
+private fun AnimatedContentTransitionScope<*>.detailExitTransition(
+    direction: AnimatedContentTransitionScope.SlideDirection
+): ExitTransition = slideOutOfContainer(
+    direction,
+    animationSpec = tween(DETAIL_TRANSITION_DURATION_MILLIS)
+) + fadeOut(animationSpec = tween(TOP_LEVEL_EXIT_DURATION_MILLIS))
