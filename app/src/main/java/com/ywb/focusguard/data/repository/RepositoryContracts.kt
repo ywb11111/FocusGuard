@@ -7,6 +7,10 @@ import com.ywb.focusguard.domain.model.LightSample
 import com.ywb.focusguard.domain.model.MotionSample
 import com.ywb.focusguard.domain.model.NoiseSample
 import com.ywb.focusguard.domain.model.SessionDetail
+import com.ywb.focusguard.domain.model.SleepDetail
+import com.ywb.focusguard.domain.model.SleepEpoch
+import com.ywb.focusguard.domain.model.SleepPlacement
+import com.ywb.focusguard.domain.model.SleepSession
 import com.ywb.focusguard.domain.model.TodaySummary
 import com.ywb.focusguard.domain.model.UserSettings
 import kotlinx.coroutines.flow.Flow
@@ -88,4 +92,44 @@ interface SettingsRepository {
 
     /** 标记首次引导已经完成。 */
     suspend fun completeOnboarding()
+}
+
+/**
+ * 睡眠记录的数据边界。
+ *
+ * 写入方是 SleepMonitorService（开始、每分钟写 epoch、结束），读取方是睡眠相关 ViewModel。
+ * 两边都只依赖这个接口，不直接接触 Room 和 SleepAnalyzer。
+ */
+interface SleepRepository {
+    /** 观察进行中的睡眠记录；没有时发射 null。 */
+    fun observeActiveSession(): Flow<SleepSession?>
+
+    /** 按开始时间倒序观察已结束的睡眠记录。 */
+    fun observeSessions(): Flow<List<SleepSession>>
+
+    /** 观察一晚的完整详情（主记录 + 分钟数据 + 实时分析）；不存在时发射 null。 */
+    fun observeSleepDetail(sessionId: Long): Flow<SleepDetail?>
+
+    /** 一次性读取进行中的记录，Service 重启恢复时使用。 */
+    suspend fun getActiveSession(): SleepSession?
+
+    /** 创建一条进行中的睡眠记录，返回 Room 生成的 id。 */
+    suspend fun startSession(placement: SleepPlacement, audioEnabled: Boolean): Long
+
+    /** 保存一分钟聚合数据。 */
+    suspend fun saveEpoch(sessionId: Long, epoch: SleepEpoch)
+
+    /**
+     * 结束一晚记录：读取全部分钟数据交给 SleepAnalyzer，回写统计和评分。
+     *
+     * @param endTime 结束时间；记录被系统中断时应传最后一分钟数据的结束时间，而不是"现在"。
+     * @param note 系统说明，例如"记录被系统中断"。
+     */
+    suspend fun finishSession(sessionId: Long, endTime: Long, note: String? = null): SleepSession?
+
+    /**
+     * 结束一晚被系统中断的记录（进程被杀、Service 没能恢复）。
+     * 结束时间取最后一分钟数据的结束时间，避免把中断后没有数据的几个小时算进报告。
+     */
+    suspend fun finishInterruptedSession(sessionId: Long): SleepSession?
 }

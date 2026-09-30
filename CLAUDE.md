@@ -35,6 +35,7 @@ FocusGuard 是专注环境助手 App，不是普通番茄钟，而是结合手�
 | 阶段 4：噪声检测 | ✅ 已完成 | AudioRecord 采集 + RMS + 相对 dB |
 | 阶段 5：后台服务 | ✅ 已完成 | 前台服务 + 通知栏控制 + SharedFlow 通信 |
 | 阶段 6：报告优化 | ✅ 已完成 | 周/月聚合、DataStore 设置、趋势图 |
+| 阶段 7：睡眠检测 | 🟡 待真机校准 | SleepMonitorService 整晚采集、Room v2 迁移、SleepAnalyzer、阶段图 |
 
 ## 协作原则
 

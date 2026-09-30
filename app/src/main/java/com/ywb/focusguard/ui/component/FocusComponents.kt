@@ -77,12 +77,17 @@ fun FocusPageHeader(
     }
 }
 
-/** 选定视觉方案中的环境评分环；Canvas 只绘制数据轨道，不承担装饰图片职责。 */
+/**
+ * 选定视觉方案中的环境评分环；Canvas 只绘制数据轨道，不承担装饰图片职责。
+ *
+ * @param label 环中心的说明文字，睡眠报告复用时传"睡眠评分"。
+ */
 @Composable
 fun EnvironmentScoreGauge(
     score: Int,
     modifier: Modifier = Modifier,
-    size: Dp = 150.dp
+    size: Dp = 150.dp,
+    label: String = "环境评分"
 ) {
     val track = MaterialTheme.colorScheme.surfaceVariant
     val indicator = MaterialTheme.colorScheme.primary
@@ -100,7 +105,7 @@ fun EnvironmentScoreGauge(
     Box(
         modifier = modifier
             .size(size)
-            .semantics { contentDescription = "环境评分 $score 分" },
+            .semantics { contentDescription = "$label $score 分" },
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.size(size)) {
@@ -121,7 +126,7 @@ fun EnvironmentScoreGauge(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = animatedScore.value.roundToInt().toString(), style = MaterialTheme.typography.displayMedium)
             Text(
-                text = "环境评分",
+                text = label,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

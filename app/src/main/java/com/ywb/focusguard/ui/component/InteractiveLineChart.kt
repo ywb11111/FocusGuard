@@ -48,23 +48,27 @@ fun InteractiveLineChart(
         return
     }
 
-    val modelProducer = remember { CartesianChartModelProducer() }
     val inspectionMode = LocalInspectionMode.current
+    val modelProducer = if (inspectionMode) {
+        remember(values) {
+            CartesianChartModelProducer().also { producer ->
+                runBlocking {
+                    producer.runTransaction {
+                        lineModel { series(values) }
+                    }
+                }
+            }
+        }
+    } else {
+        remember { CartesianChartModelProducer() }
+    }
     val bottomFormatter = remember {
         CartesianValueFormatter { _, value, _ ->
             (value.toInt() + 1).toString()
         }
     }
 
-    if (inspectionMode) {
-        remember(values) {
-            runBlocking {
-                modelProducer.runTransaction {
-                    lineModel { series(values) }
-                }
-            }
-        }
-    } else {
+    if (!inspectionMode) {
         LaunchedEffect(values) {
             modelProducer.runTransaction {
                 lineModel { series(values) }

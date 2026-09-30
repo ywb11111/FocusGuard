@@ -4,15 +4,20 @@ import android.content.Context
 import androidx.room.Room
 import com.ywb.focusguard.data.local.dao.FocusSessionDao
 import com.ywb.focusguard.data.local.dao.SampleDao
+import com.ywb.focusguard.data.local.dao.SleepDao
 import com.ywb.focusguard.data.local.database.FocusGuardDatabase
+import com.ywb.focusguard.data.local.database.MIGRATION_1_2
 import com.ywb.focusguard.data.repository.DataStoreSettingsRepository
 import com.ywb.focusguard.data.repository.EnvironmentRepository
 import com.ywb.focusguard.data.repository.EnvironmentRepositoryImpl
 import com.ywb.focusguard.data.repository.FocusRepository
 import com.ywb.focusguard.data.repository.FocusRepositoryImpl
 import com.ywb.focusguard.data.repository.SettingsRepository
+import com.ywb.focusguard.data.repository.SleepRepository
+import com.ywb.focusguard.data.repository.SleepRepositoryImpl
 import com.ywb.focusguard.domain.analyzer.EnvironmentAnalyzer
 import com.ywb.focusguard.domain.analyzer.FocusScoreAnalyzer
+import com.ywb.focusguard.domain.analyzer.SleepAnalyzer
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -34,6 +39,11 @@ abstract class RepositoryModule {
     @Singleton
     /** 环境 Repository 在全局共享，避免每个页面重复创建协调对象。 */
     abstract fun bindEnvironmentRepository(repository: EnvironmentRepositoryImpl): EnvironmentRepository
+
+    @Binds
+    @Singleton
+    /** 睡眠 Repository 同时被 SleepMonitorService 和睡眠页面 ViewModel 注入，必须是同一个实例。 */
+    abstract fun bindSleepRepository(repository: SleepRepositoryImpl): SleepRepository
 }
 
 /** 提供无法直接使用构造函数注入的 Room 和无状态 Analyzer 对象。 */
@@ -48,7 +58,10 @@ object AppModule {
             context,
             FocusGuardDatabase::class.java,
             "focus_guard.db"
-        ).build()
+        )
+            // 数据库每升级一个版本都要在这里注册迁移，老用户升级时才能保留已有专注记录
+            .addMigrations(MIGRATION_1_2)
+            .build()
 
     @Provides
     @Singleton
@@ -61,6 +74,17 @@ object AppModule {
     /** 从单例数据库获取采样 DAO，用于保存和查询光照/噪声/移动样本。 */
     fun provideSampleDao(database: FocusGuardDatabase): SampleDao =
         database.sampleDao()
+
+    @Provides
+    @Singleton
+    /** 从单例数据库获取睡眠 DAO，供 SleepRepository 使用。 */
+    fun provideSleepDao(database: FocusGuardDatabase): SleepDao =
+        database.sleepDao()
+
+    @Provides
+    @Singleton
+    /** 睡眠分析器无可变状态，可作为全局单例复用。 */
+    fun provideSleepAnalyzer(): SleepAnalyzer = SleepAnalyzer()
 
     @Provides
     @Singleton

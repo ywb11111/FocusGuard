@@ -17,7 +17,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Analytics
+import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.PhoneAndroid
@@ -51,6 +53,7 @@ import com.ywb.focusguard.ui.component.FocusDivider
 import com.ywb.focusguard.ui.component.FocusPageHeader
 import com.ywb.focusguard.ui.component.FocusStat
 import com.ywb.focusguard.ui.component.SectionHeader
+import com.ywb.focusguard.ui.state.TodaySleepSummary
 import com.ywb.focusguard.ui.state.TodayUiState
 import com.ywb.focusguard.ui.viewmodel.TodayViewModel
 import java.text.SimpleDateFormat
@@ -64,6 +67,7 @@ fun TodayRoute(
     onStartFocus: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSessionDetail: (Long) -> Unit,
+    onOpenSleep: () -> Unit,
     viewModel: TodayViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -81,6 +85,7 @@ fun TodayRoute(
         onStartFocus = onStartFocus,
         onOpenSettings = onOpenSettings,
         onOpenSessionDetail = onOpenSessionDetail,
+        onOpenSleep = onOpenSleep,
         onRequestAudioPermission = { audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
         onRequestNotificationPermission = {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -93,7 +98,9 @@ fun TodayRoute(
 /**
  * FocusGuard 的主任务入口。
  *
- * 信息层级严格遵循：环境结论 → 开始行动 → 诊断依据 → 今日统计 → 最近记录。
+ * 信息层级严格遵循：环境结论 → 开始行动 → 诊断依据 → 今日统计 → 睡眠入口 → 最近记录。
+ *
+ * @param onOpenSleep 进入睡眠监测页；为 null 时不显示睡眠卡片（截图预览沿用旧基线，不受新入口影响）。
  */
 @Composable
 fun TodayScreen(
@@ -101,6 +108,7 @@ fun TodayScreen(
     onStartFocus: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSessionDetail: (Long) -> Unit,
+    onOpenSleep: (() -> Unit)? = null,
     onRequestAudioPermission: () -> Unit = {},
     onRequestNotificationPermission: () -> Unit = {},
     dateText: String = todayDateText(),
@@ -232,6 +240,10 @@ fun TodayScreen(
             }
         }
 
+        onOpenSleep?.let { openSleep ->
+            SleepEntryCard(summary = uiState.sleepSummary, onClick = openSleep)
+        }
+
         uiState.latestSession?.let { latest ->
             Column {
                 SectionHeader(title = "最近一次")
@@ -342,6 +354,72 @@ private fun MotionMetric(environment: EnvironmentSnapshot?) {
         },
         healthy = healthy
     )
+}
+
+/**
+ * 睡眠入口卡片：监测中时强调"正在记录"，否则展示最近一晚结果并引导开始。
+ */
+@Composable
+private fun SleepEntryCard(summary: TodaySleepSummary, onClick: () -> Unit) {
+    val last = summary.lastSession
+    Column {
+        SectionHeader(title = "睡眠")
+        Spacer(Modifier.height(10.dp))
+        Card(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (summary.isRecording) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surface
+                }
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Outlined.Bedtime, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = when {
+                            summary.isRecording -> "睡眠监测进行中"
+                            last != null -> "上一晚睡了 ${formatDurationCompact(last.totalSleepMillis)}"
+                            else -> "开始睡眠监测"
+                        },
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = when {
+                            summary.isRecording -> "点击查看状态或结束记录"
+                            else -> "睡前开启，早上查看睡眠报告"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (!summary.isRecording && last != null) {
+                    Text(
+                        text = last.score.toString(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

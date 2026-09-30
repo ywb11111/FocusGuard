@@ -19,6 +19,8 @@ import com.ywb.focusguard.ui.screen.ReportsRoute
 import com.ywb.focusguard.ui.screen.SessionDetailRoute
 import com.ywb.focusguard.ui.screen.SessionRoute
 import com.ywb.focusguard.ui.screen.SettingsRoute
+import com.ywb.focusguard.ui.screen.SleepDetailRoute
+import com.ywb.focusguard.ui.screen.SleepRoute
 import com.ywb.focusguard.ui.screen.TodayRoute
 
 private const val TOP_LEVEL_ENTER_DURATION_MILLIS = 160
@@ -86,6 +88,9 @@ fun FocusGuardNavHost(
                 onOpenSettings = { navController.navigate(Destination.Settings.route) },
                 onOpenSessionDetail = { id ->
                     navController.navigate(Destination.SessionDetail.createRoute(id))
+                },
+                onOpenSleep = {
+                    navController.navigate(Destination.Sleep.route) { launchSingleTop = true }
                 }
             )
         }
@@ -138,6 +143,20 @@ fun FocusGuardNavHost(
             })
         ) {
             SessionDetailRoute(onBack = { navController.popBackStack() })
+        }
+        composable(Destination.Sleep.route) {
+            SleepRoute(
+                onBack = { navController.popBackStack() },
+                onOpenDetail = { id -> navController.navigate(Destination.SleepDetail.createRoute(id)) }
+            )
+        }
+        composable(
+            route = Destination.SleepDetail.route,
+            arguments = listOf(navArgument(Destination.SleepDetail.ARG_SLEEP_ID) {
+                type = NavType.LongType
+            })
+        ) {
+            SleepDetailRoute(onBack = { navController.popBackStack() })
         }
     }
 }

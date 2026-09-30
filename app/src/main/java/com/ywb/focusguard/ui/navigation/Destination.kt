@@ -42,6 +42,17 @@ sealed class Destination(val route: String) {
         // 带参数页面不要手写 "session_detail/$id"，统一通过函数生成，后续改路由格式时更安全。
         fun createRoute(sessionId: Long) = "session_detail/$sessionId"
     }
+
+    /** 睡眠监测页：准备 / 监测中 / 中断 三种状态共用一个页面，和专注页一样是沉浸式临时页。 */
+    data object Sleep : Destination("sleep")
+
+    /** 带 sleepId 参数的睡眠报告页。 */
+    data object SleepDetail : Destination("sleep_detail/{sleepId}") {
+        /** Navigation 参数键，SleepDetailViewModel 通过 SavedStateHandle 读取。 */
+        const val ARG_SLEEP_ID = "sleepId"
+
+        fun createRoute(sleepId: Long) = "sleep_detail/$sleepId"
+    }
 }
 
 /**

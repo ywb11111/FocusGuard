@@ -9,6 +9,12 @@
     <!-- 阶段 5 使用：允许专注监测服务以前台服务运行。 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- 阶段 7 睡眠监测：整晚熄屏后仍需保持 CPU 运行采集传感器，普通权限，安装即授予。 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Android 14 health 类型前台服务（睡眠只用体动、不用麦克风时）需要的权限。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <!-- health 类型的运行时前置条件之一；普通权限无需弹窗，本 App 实际仍以低频采样。 -->
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
     <!-- 特殊访问权限，不能通过普通运行时权限弹窗授予，需要引导用户前往系统设置。 -->
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"
@@ -25,6 +31,11 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.FocusGuard">
+        <!-- 允许基准测试读取发布构建的系统跟踪，同时保持应用不可调试。 -->
+        <profileable
+            android:shell="true"
+            tools:targetApi="q" />
+
         <!-- App 唯一入口 Activity，负责承载 Compose UI。 -->
         <activity
             android:name=".MainActivity"
@@ -67,6 +78,12 @@
             android:name=".service.FocusMonitorService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- 阶段 7 睡眠监测服务：体动用 health 类型，声音分析用 microphone 类型，运行时按权限组合。 -->
+        <service
+            android:name=".service.SleepMonitorService"
+            android:exported="false"
+            android:foregroundServiceType="health|microphone" />
 
         <!-- 接收通知栏按钮点击事件。 -->
         <receiver

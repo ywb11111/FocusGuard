@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.screenshot)
+    alias(libs.plugins.baseline.profile)
 }
 
 android {
@@ -67,6 +68,8 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.vico.compose)
     implementation(libs.vico.compose.m3)
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":benchmark"))
     ksp(libs.androidx.room.compiler)
     ksp(libs.hilt.compiler)
     testImplementation(libs.junit)

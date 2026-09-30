@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ywb.focusguard.data.repository.EnvironmentRepository
 import com.ywb.focusguard.data.repository.FocusRepository
+import com.ywb.focusguard.data.repository.SleepRepository
+import com.ywb.focusguard.ui.state.TodaySleepSummary
 import com.ywb.focusguard.ui.state.TodayUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,23 +21,35 @@ class TodayViewModel @Inject constructor(
     /** 提供 Room 中的专注统计和历史记录。 */
     focusRepository: FocusRepository,
     /** 提供权限状态检查和更新。 */
-    private val permissionManager: PermissionManager
+    private val permissionManager: PermissionManager,
+    /** 提供睡眠入口卡片需要的进行中状态和最近一晚记录。 */
+    sleepRepository: SleepRepository
 ) : ViewModel() {
-    // combine 用来把多个数据源合成一个页面状态：环境快照 + 今日统计 + 最近记录 + 权限状态。
+    /** 睡眠入口数据：先把两路睡眠 Flow 合成一个，避免主 combine 超过 5 个参数。 */
+    private val sleepSummary = combine(
+        sleepRepository.observeActiveSession(),
+        sleepRepository.observeSessions()
+    ) { active, sessions ->
+        TodaySleepSummary(isRecording = active != null, lastSession = sessions.firstOrNull())
+    }
+
+    // combine 用来把多个数据源合成一个页面状态：环境快照 + 今日统计 + 最近记录 + 权限状态 + 睡眠入口。
     // 这样 Screen 只需要收集一个 uiState，而不是同时订阅好几个 Flow。
     /** 生命周期感知的今日页状态；只有页面订阅时才保持上游传感器流活跃。 */
     val uiState = combine(
         environmentRepository.observeEnvironmentSnapshot(),
         focusRepository.observeTodaySummary(),
         focusRepository.observeSessions(),
-        permissionManager.permissionState
-    ) { environment, summary, sessions, permissions ->
+        permissionManager.permissionState,
+        sleepSummary
+    ) { environment, summary, sessions, permissions, sleep ->
         TodayUiState(
             isLoading = false,
             environment = environment,
             todaySummary = summary,
             latestSession = sessions.firstOrNull(),
-            permissionState = permissions
+            permissionState = permissions,
+            sleepSummary = sleep
         )
     }.stateIn(
         scope = viewModelScope,

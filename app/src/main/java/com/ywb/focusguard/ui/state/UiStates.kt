@@ -20,6 +20,7 @@ import com.ywb.focusguard.domain.model.UserSettings
  * @property permissionState 当前权限状态，后续接入真实权限检查。
  * @property activeSession 跨页面展示的进行中会话，当前尚未接入。
  * @property errorMessage 页面可展示的错误信息，null 表示没有错误。
+ * @property sleepSummary 睡眠入口卡片数据：是否正在监测、最近一晚结果。
  */
 data class TodayUiState(
     val isLoading: Boolean = true,
@@ -28,7 +29,8 @@ data class TodayUiState(
     val latestSession: FocusSession? = null,
     val permissionState: PermissionState = PermissionState(),
     val activeSession: ActiveSession? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val sleepSummary: TodaySleepSummary = TodaySleepSummary()
 )
 
 /** sealed 状态机限制专注页的合法阶段，避免多个 Boolean 组合出矛盾状态。 */
