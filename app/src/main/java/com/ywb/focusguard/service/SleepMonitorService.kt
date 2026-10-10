@@ -19,6 +19,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.ywb.focusguard.MainActivity
 import com.ywb.focusguard.R
+import com.ywb.focusguard.data.repository.SleepAlarmRepository
 import com.ywb.focusguard.data.repository.SleepRepository
 import com.ywb.focusguard.data.sensor.LightSensorDataSource
 import com.ywb.focusguard.data.sensor.SleepEpochAccumulator
@@ -26,9 +27,11 @@ import com.ywb.focusguard.data.sensor.SleepMotionDataSource
 import com.ywb.focusguard.data.sensor.SleepSoundDataSource
 import com.ywb.focusguard.data.sensor.SleepSoundEventDetector
 import com.ywb.focusguard.domain.analyzer.SleepAnalyzer
+import com.ywb.focusguard.domain.analyzer.SmartAlarmPlanner
 import com.ywb.focusguard.domain.model.SleepEpoch
 import com.ywb.focusguard.domain.model.SleepLiveStatus
 import com.ywb.focusguard.domain.model.SleepPlacement
+import com.ywb.focusguard.domain.model.SmartAlarmPlan
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -40,6 +43,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,7 +70,8 @@ private const val TAG = "SleepMonitorService"
  * 4. 多线程：体动、声音、光照在不同协程回调，亮灭屏在主线程广播回调，共享的 SleepEpochAccumulator 内部加锁。
  *
  * **生命周期**：
- * - 睡眠页点击"开始"→ [start] → onStartCommand(ACTION_START) → 进入前台 → 获取 WakeLock → 开始采集
+ * - 睡眠页点击"开始"→ [start] → onStartCommand(ACTION_START) → 进入前台 → 获取 WakeLock → 注册闹钟 → 开始采集
+ * - 每分钟写库后检查智能闹钟：唤醒窗口内检测到浅睡，就把闹钟提前到现在
  * - 页面或通知点击"结束"→ [stop] → onStartCommand(ACTION_STOP) → 停止采集 → 分析并写库 → stopSelf
  * - onDestroy 释放 WakeLock、注销广播、取消全部协程
  */
@@ -77,8 +82,11 @@ class SleepMonitorService : Service() {
         /** 通知渠道 ID，系统设置中可见。 */
         const val CHANNEL_ID = "sleep_monitor_channel"
 
-        /** 前台通知 ID，与专注服务的 1001 区分。 */
-        const val NOTIFICATION_ID = 1002
+        /**
+         * 前台通知 ID。同一 App 内通知 ID 必须唯一：1001 是专注服务，1002 是每日总结，
+         * 之前误用 1002 会导致晚上 9 点的日报通知顶掉睡眠监测的前台通知。
+         */
+        const val NOTIFICATION_ID = 1003
 
         /** 开始监测。 */
         const val ACTION_START = "com.ywb.focusguard.action.SLEEP_START"
@@ -126,6 +134,18 @@ class SleepMonitorService : Service() {
     @Inject lateinit var motionDataSource: SleepMotionDataSource
     @Inject lateinit var soundDataSource: SleepSoundDataSource
     @Inject lateinit var lightDataSource: LightSensorDataSource
+    @Inject lateinit var sleepAlarmRepository: SleepAlarmRepository
+    @Inject lateinit var alarmScheduler: SleepAlarmScheduler
+    @Inject lateinit var smartAlarmPlanner: SmartAlarmPlanner
+
+    /** 今晚的闹钟计划；null 表示没开闹钟。 */
+    @Volatile private var alarmPlan: SmartAlarmPlan? = null
+
+    /** 是否已经触发过智能提前唤醒，避免每分钟重复改闹钟。 */
+    @Volatile private var smartAlarmTriggered = false
+
+    /** 最近 3 分钟的数据，供智能闹钟判断浅睡；只在计时协程中读写。 */
+    private val recentEpochs = ArrayDeque<SleepEpoch>()
 
     /**
      * Service 自己的协程作用域。
@@ -256,6 +276,8 @@ class SleepMonitorService : Service() {
             }
         }
 
+        setupAlarm()
+
         val acc = SleepEpochAccumulator(epochStart = System.currentTimeMillis())
         accumulator = acc
         // 记录开始那一刻屏幕通常是亮的（用户刚点完按钮），要先告诉聚合器初始状态
@@ -311,6 +333,7 @@ class SleepMonitorService : Service() {
             sleepRepository.saveEpoch(sessionId, epoch)
             recordedEpochs++
             publishStatus(epoch)
+            checkSmartAlarm(epoch)
             boundary += SleepAnalyzer.EPOCH_MILLIS
 
             if (System.currentTimeMillis() - sessionStartedAt >= MAX_SESSION_MILLIS) {
@@ -321,13 +344,53 @@ class SleepMonitorService : Service() {
     }
 
     /**
+     * 根据闹钟设置计算今晚的计划，并把"最晚时间"注册为兜底闹钟。
+     *
+     * 以记录开始时间（而不是现在）计算：系统重建 Service 后算出的仍是同一晚的闹钟，重复注册只会覆盖同一个闹钟。
+     * 最晚时间已过（例如服务在闹钟响过之后才被重建）就不再注册，避免补响。
+     */
+    private suspend fun setupAlarm() {
+        val plan = smartAlarmPlanner.plan(sleepAlarmRepository.settings.first(), afterMillis = sessionStartedAt)
+        alarmPlan = plan
+        if (plan != null && plan.latestMillis > System.currentTimeMillis()) {
+            alarmScheduler.schedule(plan.latestMillis, smartEarly = false)
+        }
+    }
+
+    /**
+     * 每分钟检查一次：进入唤醒窗口且检测到浅睡，就把闹钟改到"现在"。
+     * 只改 AlarmManager 里的闹钟，不在这里直接响铃——响铃永远只走 AlarmManager → 响铃服务这一条路径。
+     */
+    private fun checkSmartAlarm(epoch: SleepEpoch) {
+        recentEpochs.addLast(epoch)
+        while (recentEpochs.size > 3) recentEpochs.removeFirst()
+        val plan = alarmPlan ?: return
+        if (smartAlarmTriggered) return
+        if (smartAlarmPlanner.shouldWakeEarly(
+                recentEpochs = recentEpochs.toList(),
+                nowMillis = System.currentTimeMillis(),
+                plan = plan,
+                placement = placement,
+                sessionStartMillis = sessionStartedAt
+            )
+        ) {
+            smartAlarmTriggered = true
+            alarmScheduler.schedule(System.currentTimeMillis() + 1_000L, smartEarly = true)
+            Log.d(TAG, "检测到浅睡，提前 ${(plan.latestMillis - System.currentTimeMillis()) / 60_000} 分钟唤醒")
+        }
+    }
+
+    /**
      * 结束流程：停止采集 → 保存最后不足一分钟的数据 → 分析写库 → 通知页面 → 退出前台并停止。
+     * 结束记录意味着人已经醒了，同时取消今晚还没响的闹钟。
      *
      * @param note 写入记录的系统说明；null 表示正常结束。
      */
     private fun finishAndStop(note: String?) {
         if (finishing) return
         finishing = true
+        // 正在响铃时不取消：响铃服务的"关闭"会自己处理；这里取消的是还没到点的闹钟
+        if (AlarmStateHolder.ringing.value == null) alarmScheduler.cancel()
         serviceScope.launch {
             // 先确保采集协程完全停止，之后聚合器不会再有新数据写入
             collectJob?.cancelAndJoin()

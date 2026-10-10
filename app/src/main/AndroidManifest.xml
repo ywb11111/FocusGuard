@@ -15,10 +15,41 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
     <!-- health 类型的运行时前置条件之一；普通权限无需弹窗，本 App 实际仍以低频采样。 -->
     <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
-    <!-- 特殊访问权限，不能通过普通运行时权限弹窗授予，需要引导用户前往系统设置。 -->
+    <!--
+        智能闹钟：精确闹钟权限的官方推荐组合。
+        Android 12/12L 使用 SCHEDULE_EXACT_ALARM（默认授予，用户可撤销）；
+        Android 13+ 使用 USE_EXACT_ALARM（自动授予，但应用商店只允许闹钟/日历类 App 声明，上架前需评估）。
+    -->
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- 锁屏 / 熄屏时直接全屏弹出响铃页；Android 14+ 需要用户在设置中允许。 -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- 响铃服务以 mediaPlayback 类型运行。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- 响铃时振动，普通权限。 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 特殊访问权限，不能通过普通运行时权限弹窗授予，需要引导用户前往系统设置；用于分心检测。 -->
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
+
+    <!--
+        分心检测需要：Android 11+ 的包可见性限制下，默认看不到其他 App。
+        只声明"有桌面图标的 App"和"桌面本身"两类，用于显示分心 App 名称、排除桌面，
+        不使用 QUERY_ALL_PACKAGES（权限过大，应用商店审核严格）。
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+    </queries>
 
     <!-- Hilt 要求 Application 使用 @HiltAndroidApp 的实现类。 -->
     <application
@@ -84,6 +115,32 @@
             android:name=".service.SleepMonitorService"
             android:exported="false"
             android:foregroundServiceType="health|microphone" />
+
+        <!-- 智能闹钟：AlarmManager 触发入口，只接收本 App 的 PendingIntent。 -->
+        <receiver
+            android:name=".service.SleepAlarmReceiver"
+            android:exported="false" />
+
+        <!-- 智能闹钟：播放铃声和振动的前台服务。 -->
+        <service
+            android:name=".service.AlarmRingService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!--
+            智能闹钟：响铃页。showWhenLocked / turnScreenOn 让它显示在锁屏上并点亮屏幕（8.1 以下在代码里用窗口标志）；
+            独立任务栈 + 不进最近任务，避免关掉闹钟后把用户带回 App 首页。
+        -->
+        <activity
+            android:name=".ui.alarm.AlarmActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.FocusGuard"
+            android:turnScreenOn="true"
+            tools:targetApi="o_mr1" />
 
         <!-- 接收通知栏按钮点击事件。 -->
         <receiver

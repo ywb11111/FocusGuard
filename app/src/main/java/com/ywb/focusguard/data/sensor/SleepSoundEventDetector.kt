@@ -60,20 +60,32 @@ data class SoundEvent(
  * @property snoreStreakRequired 连续多少次符合节律才判定为鼾声。
  */
 class SleepSoundEventDetector(
-    private val triggerAboveBaselineDb: Float = 10f,
+    private val triggerAboveBaselineDb: Float = DEFAULT_TRIGGER_ABOVE_BASELINE_DB,
     private val releaseHysteresisDb: Float = 3f,
     private val minEventMillis: Long = 200L,
     private val maxEventMillis: Long = 5_000L,
-    private val snoreMaxHz: Float = 700f,
+    private val snoreMaxHz: Float = DEFAULT_SNORE_MAX_HZ,
     private val snoreMinDurationMillis: Long = 300L,
     private val snoreMaxDurationMillis: Long = 3_500L,
     private val snoreMinIntervalMillis: Long = 1_500L,
     private val snoreMaxIntervalMillis: Long = 8_000L,
     private val snoreStreakRequired: Int = 3
 ) {
+    companion object {
+        /** 高出底噪多少 dB 算事件，传感器调试页展示用。 */
+        const val DEFAULT_TRIGGER_ABOVE_BASELINE_DB = 10f
+
+        /** 鼾声主频上限，单位 Hz，传感器调试页展示用。 */
+        const val DEFAULT_SNORE_MAX_HZ = 700f
+    }
+
     /** 当前估计的环境底噪；NaN 表示还没收到第一帧。 */
     var baselineDb: Float = Float.NaN
         private set
+
+    /** 当前事件触发线 = 底噪 + 触发量，传感器调试页画出来对照实际音量。 */
+    val triggerLevelDb: Float
+        get() = baselineDb + triggerAboveBaselineDb
 
     /** 进行中事件的开始时间；null 表示当前安静。 */
     private var eventStart: Long? = null

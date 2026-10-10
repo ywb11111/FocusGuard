@@ -1,5 +1,6 @@
 package com.ywb.focusguard.data.repository
 
+import com.ywb.focusguard.data.local.dao.DistractionDao
 import com.ywb.focusguard.data.local.dao.FocusSessionDao
 import com.ywb.focusguard.data.local.dao.SampleDao
 import com.ywb.focusguard.data.local.entity.FocusSessionEntity
@@ -7,7 +8,9 @@ import com.ywb.focusguard.data.local.entity.LightSampleEntity
 import com.ywb.focusguard.data.local.entity.MotionEventEntity
 import com.ywb.focusguard.data.local.entity.NoiseSampleEntity
 import com.ywb.focusguard.data.local.mapper.toDomain
+import com.ywb.focusguard.domain.analyzer.DistractionAnalyzer
 import com.ywb.focusguard.domain.analyzer.FocusScoreAnalyzer
+import com.ywb.focusguard.domain.model.DistractionEvent
 import com.ywb.focusguard.domain.model.FocusConfig
 import com.ywb.focusguard.domain.model.FocusScore
 import com.ywb.focusguard.domain.model.FocusSession
@@ -37,7 +40,11 @@ class FocusRepositoryImpl @Inject constructor(
     /** 负责采样表的查询与写入。 */
     private val sampleDao: SampleDao,
     /** 结束会话时根据聚合指标生成可解释评分。 */
-    private val scoreAnalyzer: FocusScoreAnalyzer
+    private val scoreAnalyzer: FocusScoreAnalyzer,
+    /** 分心记录表：结束时统计次数参与评分，详情页展示明细。 */
+    private val distractionDao: DistractionDao,
+    /** 把分心明细按 App 聚合。 */
+    private val distractionAnalyzer: DistractionAnalyzer
 ) : FocusRepository {
 
     // ==================== 查询接口 ====================
@@ -80,8 +87,9 @@ class FocusRepositoryImpl @Inject constructor(
             focusSessionDao.observeSession(sessionId),
             sampleDao.observeNoiseSamples(sessionId),
             sampleDao.observeLightSamples(sessionId),
-            sampleDao.observeMotionEvents(sessionId)
-        ) { entity, noiseEntities, lightEntities, motionEntities ->
+            sampleDao.observeMotionEvents(sessionId),
+            distractionDao.observeEvents(sessionId)
+        ) { entity, noiseEntities, lightEntities, motionEntities, distractionEntities ->
             val session = entity?.toDomain() ?: return@combine null
 
             // 噪声曲线：从采样表转换为领域模型
@@ -112,19 +120,44 @@ class FocusRepositoryImpl @Inject constructor(
                 )
             }
 
+            // 分心明细：从分心表按 App 聚合
+            val distractions = distractionAnalyzer.summarize(
+                distractionEntities.map { entity ->
+                    DistractionEvent(
+                        packageName = entity.packageName,
+                        appLabel = entity.appLabel,
+                        startTime = entity.startTime,
+                        endTime = entity.endTime
+                    )
+                }
+            )
+
+            // 评分拆解必须和结束时计算总分用同一个 FocusScoreAnalyzer、同一批聚合值，
+            // 否则会出现"总分 70，但各项扣分加起来对不上"。以前这里单独写了一套规则：
+            // 光照扣分写死 0、移动扣分没有上限、分心扣分写死 5 分。
+            val breakdown = scoreAnalyzer.calculate(
+                averageNoiseDb = session.averageNoiseDb,
+                averageLightLux = session.averageLightLux,
+                movementCount = session.movementCount,
+                distractionCount = session.distractionCount,
+                durationMillis = session.durationMillis
+            )
+
             SessionDetail(
                 session = session,
                 noiseSamples = noiseSamples,
                 lightSamples = lightSamples,
                 motionEvents = motionEvents,
                 score = FocusScore(
+                    // 总分以数据库里结束时保存的为准，拆解只用于解释
                     total = session.score,
-                    noisePenalty = calculateNoisePenalty(noiseSamples),
-                    lightPenalty = 0,
-                    motionPenalty = motionEvents.size * 3,
-                    distractionPenalty = 5,
+                    noisePenalty = breakdown.noisePenalty,
+                    lightPenalty = breakdown.lightPenalty,
+                    motionPenalty = breakdown.motionPenalty,
+                    distractionPenalty = breakdown.distractionPenalty,
                     suggestions = generateSuggestions(session, lightSamples, motionEvents)
-                )
+                ),
+                distractions = distractions
             )
         }
 
@@ -175,12 +208,17 @@ class FocusRepositoryImpl @Inject constructor(
 
         val movementCount = motionEvents.size
 
+        // 分心次数：SessionViewModel 在调用本方法前已把分心片段写入 distraction_events；
+        // 未授权时表里没有数据，次数为 0，distractionTracked 为 false，页面会显示"未检测"
+        val distractionCount = distractionDao.countForSession(sessionId)
+        val distractionTracked = existing?.distractionTracked ?: false
+
         // 计算评分
         val score = scoreAnalyzer.calculate(
             averageNoiseDb = averageNoiseDb,
             averageLightLux = averageLightLux,
             movementCount = movementCount,
-            distractionCount = 0,
+            distractionCount = distractionCount,
             durationMillis = durationMillis
         )
 
@@ -193,7 +231,7 @@ class FocusRepositoryImpl @Inject constructor(
             maxNoiseDb = maxNoiseDb,
             averageLightLux = averageLightLux,
             movementCount = movementCount,
-            distractionCount = 0,
+            distractionCount = distractionCount,
             score = score.total,
             note = categoryLabel
         )
@@ -207,9 +245,10 @@ class FocusRepositoryImpl @Inject constructor(
             maxNoiseDb = maxNoiseDb,
             averageLightLux = averageLightLux,
             movementCount = movementCount,
-            distractionCount = 0,
+            distractionCount = distractionCount,
             score = score.total,
-            note = categoryLabel
+            note = categoryLabel,
+            distractionTracked = distractionTracked
         )
     }
 
@@ -266,17 +305,6 @@ class FocusRepositoryImpl @Inject constructor(
         else -> NoiseLevel.LOUD
     }
 
-    /** 计算噪声扣分：基于平均噪声等级。 */
-    private fun calculateNoisePenalty(samples: List<NoiseSample>): Int {
-        if (samples.isEmpty()) return 0
-        val avgDb = samples.map { it.decibel }.average()
-        return when {
-            avgDb > 75f -> 25
-            avgDb > 65f -> 15
-            avgDb > 55f -> 8
-            else -> 0
-        }
-    }
 
     /** 生成个性化建议。 */
     private fun generateSuggestions(
@@ -300,6 +328,11 @@ class FocusRepositoryImpl @Inject constructor(
                 avgLux < 50 -> suggestions.add("光照偏暗，建议增加环境亮度保护眼睛。")
                 avgLux > 800 -> suggestions.add("光照偏亮，可以适当调暗灯光。")
             }
+        }
+
+        // 基于分心次数（仅在开启分心检测时给出，未检测不能当作"没有分心"）
+        if (session.distractionTracked && session.distractionCount >= 3) {
+            suggestions.add("专注期间切出去 ${session.distractionCount} 次，可以开启勿扰或把手机放远一点。")
         }
 
         // 基于时长

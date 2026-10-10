@@ -1,14 +1,23 @@
 package com.ywb.focusguard.ui.viewmodel
 
 import android.app.Application
+import android.app.NotificationManager
 import android.content.Context
+import android.os.Build
 import android.os.PowerManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ywb.focusguard.data.repository.SleepAlarmRepository
 import com.ywb.focusguard.data.repository.SleepRepository
+import com.ywb.focusguard.domain.analyzer.SmartAlarmPlanner
+import com.ywb.focusguard.domain.model.SleepAlarmSettings
 import com.ywb.focusguard.domain.model.SleepPlacement
+import com.ywb.focusguard.service.AlarmRingService
+import com.ywb.focusguard.service.AlarmStateHolder
+import com.ywb.focusguard.service.SleepAlarmScheduler
 import com.ywb.focusguard.service.SleepMonitorService
 import com.ywb.focusguard.service.SleepStateHolder
+import com.ywb.focusguard.ui.screen.clockText
 import com.ywb.focusguard.ui.state.SleepChecklist
 import com.ywb.focusguard.ui.state.SleepUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -36,8 +46,25 @@ class SleepViewModel @Inject constructor(
     /** 睡眠记录的读取和中断记录的收尾。 */
     private val sleepRepository: SleepRepository,
     /** 复用已有的麦克风、通知权限检查。 */
-    private val permissionManager: PermissionManager
+    private val permissionManager: PermissionManager,
+    /** 智能闹钟设置的读写。 */
+    private val sleepAlarmRepository: SleepAlarmRepository,
+    /** 用于检查精确闹钟权限。 */
+    private val alarmScheduler: SleepAlarmScheduler,
+    /** 计算监测中页面展示的闹钟时间段，与 Service 使用同一套规则。 */
+    private val smartAlarmPlanner: SmartAlarmPlanner
 ) : AndroidViewModel(application) {
+
+    /**
+     * 本页的本地输入汇总。主 combine 最多接收 5 个 Flow，先把本地状态合成一个再参与组合。
+     */
+    private data class LocalInputs(
+        val placement: SleepPlacement?,
+        val checklist: SleepChecklist,
+        val finishing: Boolean,
+        val alarm: SleepAlarmSettings,
+        val alarmRinging: Boolean
+    )
 
     /** 用户本次手动选择的摆放位置；null 表示沿用上一晚。 */
     private val selectedPlacement = MutableStateFlow<SleepPlacement?>(null)
@@ -64,22 +91,35 @@ class SleepViewModel @Inject constructor(
         sleepRepository.observeSessions(),
         SleepStateHolder.serviceRunning,
         SleepStateHolder.liveStatus,
-        combine(selectedPlacement, checklist, finishing, ::Triple)
-    ) { active, sessions, serviceRunning, live, (placement, checks, isFinishing) ->
+        combine(
+            selectedPlacement,
+            checklist,
+            finishing,
+            sleepAlarmRepository.settings,
+            AlarmStateHolder.ringing
+        ) { placement, checks, isFinishing, alarm, ringing ->
+            LocalInputs(placement, checks, isFinishing, alarm, ringing != null)
+        }
+    ) { active, sessions, serviceRunning, live, inputs ->
         when {
-            isFinishing -> SleepUiState.Finishing
+            inputs.finishing -> SleepUiState.Finishing
             active != null && serviceRunning -> SleepUiState.Recording(
                 session = active,
-                live = live?.takeIf { it.sessionId == active.id }
+                live = live?.takeIf { it.sessionId == active.id },
+                alarmWindowText = smartAlarmPlanner.plan(inputs.alarm, afterMillis = active.startTime)?.let { plan ->
+                    "${clockText(plan.windowStartMillis)}–${clockText(plan.latestMillis)}"
+                },
+                alarmRinging = inputs.alarmRinging
             )
             active != null -> SleepUiState.Interrupted(active)
             else -> {
                 val recent = sessions.take(7)
                 SleepUiState.Ready(
-                    placement = placement ?: sessions.firstOrNull()?.placement ?: SleepPlacement.BED,
-                    checklist = checks,
+                    placement = inputs.placement ?: sessions.firstOrNull()?.placement ?: SleepPlacement.BED,
+                    checklist = inputs.checklist,
                     recentSessions = recent,
-                    trendScores = recent.reversed().map { it.score.toFloat() }
+                    trendScores = recent.reversed().map { it.score.toFloat() },
+                    alarm = inputs.alarm
                 )
             }
         }
@@ -107,15 +147,44 @@ class SleepViewModel @Inject constructor(
 
     /** 重新检查权限和电池优化状态；从系统设置页返回时调用。 */
     fun refreshChecklist() {
-        val powerManager = getApplication<Application>().getSystemService(Context.POWER_SERVICE) as PowerManager
+        val app = getApplication<Application>()
+        val powerManager = app.getSystemService(Context.POWER_SERVICE) as PowerManager
         checklist.value = SleepChecklist(
             audioGranted = permissionManager.isAudioPermissionGranted(),
             notificationGranted = permissionManager.isNotificationPermissionGranted(),
-            batteryOptimizationIgnored = powerManager.isIgnoringBatteryOptimizations(
-                getApplication<Application>().packageName
-            )
+            batteryOptimizationIgnored = powerManager.isIgnoringBatteryOptimizations(app.packageName),
+            exactAlarmAllowed = alarmScheduler.canScheduleExact(),
+            // Android 14 起全屏通知需要用户授权，之前的版本声明权限即可
+            fullScreenAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+                app.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
         )
         permissionManager.refreshPermissionState()
+    }
+
+    /** 开关智能闹钟。 */
+    fun setAlarmEnabled(enabled: Boolean) = updateAlarm { it.copy(enabled = enabled) }
+
+    /** 设置最晚起床时间。 */
+    fun setAlarmTime(hour: Int, minute: Int) = updateAlarm { it.copy(wakeHour = hour, wakeMinute = minute) }
+
+    /** 设置提前唤醒窗口长度。 */
+    fun setAlarmWindow(minutes: Int) = updateAlarm { it.copy(windowMinutes = minutes) }
+
+    /** 读取最新设置后修改并保存，保证多个字段的修改不会互相覆盖。 */
+    private fun updateAlarm(transform: (SleepAlarmSettings) -> SleepAlarmSettings) {
+        viewModelScope.launch {
+            sleepAlarmRepository.update(transform(sleepAlarmRepository.settings.first()))
+        }
+    }
+
+    /** 在 App 内关闭正在响的闹钟（同时结束睡眠记录）。 */
+    fun dismissAlarm() {
+        AlarmRingService.dismiss(getApplication())
+    }
+
+    /** 在 App 内贪睡。 */
+    fun snoozeAlarm() {
+        AlarmRingService.snooze(getApplication())
     }
 
     /** 开始睡眠监测：只发指令，记录由 Service 创建。 */

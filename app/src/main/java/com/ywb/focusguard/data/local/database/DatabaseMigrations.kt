@@ -59,3 +59,33 @@ val MIGRATION_1_2: Migration = object : Migration(1, 2) {
         )
     }
 }
+
+/**
+ * 数据库 2 → 3：分心检测。
+ *
+ * 1. focus_sessions 新增 distractionTracked 列。
+ *    给已有表加列用 ALTER TABLE ADD COLUMN；NOT NULL 列必须带 DEFAULT，否则已有行没有值，SQLite 会拒绝。
+ *    Entity 上的 @ColumnInfo(defaultValue = "0") 要与这里的 DEFAULT 0 一致，Room 校验时会比较默认值。
+ * 2. 新增 distraction_events 表和 sessionId 索引。
+ *
+ * 用户可能从 1 直接升级到 3，Room 会依次执行 MIGRATION_1_2、MIGRATION_2_3，所以每个迁移只管相邻两个版本。
+ */
+val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `focus_sessions` ADD COLUMN `distractionTracked` INTEGER NOT NULL DEFAULT 0"
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `distraction_events` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`sessionId` INTEGER NOT NULL, " +
+                "`packageName` TEXT NOT NULL, " +
+                "`appLabel` TEXT NOT NULL, " +
+                "`startTime` INTEGER NOT NULL, " +
+                "`endTime` INTEGER NOT NULL)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_distraction_events_sessionId` ON `distraction_events` (`sessionId`)"
+        )
+    }
+}

@@ -14,6 +14,7 @@ package com.ywb.focusguard.domain.model
  * @property distractionCount 分心行为数量。
  * @property score 可解释评分，范围 0 到 100。
  * @property note 用户备注或系统说明。
+ * @property distractionTracked 是否开启了分心检测；false 时 distractionCount 的 0 表示"未检测"而非"没有分心"。
  */
 data class FocusSession(
     val id: Long,
@@ -26,7 +27,8 @@ data class FocusSession(
     val movementCount: Int,
     val distractionCount: Int,
     val score: Int,
-    val note: String?
+    val note: String?,
+    val distractionTracked: Boolean = false
 )
 
 /** 用户为一次专注选择的用途，用于在报告中比较不同任务类型。 */
@@ -101,13 +103,15 @@ data class TodaySummary(
  * @property lightSamples 按时间升序排列的光照样本。
  * @property motionEvents 防抖后确认的移动事件。
  * @property score 本次会话的评分拆解。
+ * @property distractions 按 App 聚合的分心统计，按累计时长降序。
  */
 data class SessionDetail(
     val session: FocusSession,
     val noiseSamples: List<NoiseSample>,
     val lightSamples: List<LightSample>,
     val motionEvents: List<MotionSample>,
-    val score: FocusScore
+    val score: FocusScore,
+    val distractions: List<DistractionSummary> = emptyList()
 )
 
 /**

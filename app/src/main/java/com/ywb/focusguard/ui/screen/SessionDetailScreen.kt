@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -112,6 +113,8 @@ private fun SessionDetailContent(uiState: SessionDetailUiState.Content, onBack: 
             FocusStat("${uiState.motionCount} 次", "手机移动", Modifier.weight(1f), icon = Icons.Outlined.PhoneAndroid)
         }
 
+        DistractionSection(uiState)
+
         DetailChart("噪声变化", "相对 dB，仅保存分析结果", uiState.noiseValues, Icons.Outlined.GraphicEq)
         DetailChart("光照变化", "lux，记录环境亮度变化", uiState.lightValues, Icons.Outlined.LightMode)
 
@@ -142,6 +145,56 @@ private fun SessionDetailContent(uiState: SessionDetailUiState.Content, onBack: 
             }
         }
         Spacer(Modifier.size(4.dp))
+    }
+}
+
+/**
+ * 分心记录：未开启检测时明确说"未检测"，不能显示成"0 次分心"冒充表现完美。
+ */
+@Composable
+private fun DistractionSection(uiState: SessionDetailUiState.Content) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SectionHeader(
+            title = "分心记录",
+            action = {
+                if (uiState.distractionTracked) {
+                    Text(
+                        "切出 ${uiState.distractionCount} 次",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        )
+        Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                when {
+                    !uiState.distractionTracked -> Text(
+                        "本次未开启分心检测。在「设置 → 权限与隐私 → 分心检测」中授权后，下次专注会自动统计切到了哪些 App。",
+                        modifier = Modifier.padding(vertical = 10.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    uiState.distractionItems.isEmpty() -> Text(
+                        "专注期间没有切到其他 App，保持得很好。",
+                        modifier = Modifier.padding(vertical = 10.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    else -> uiState.distractionItems.forEachIndexed { index, item ->
+                        if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(item.appLabel, style = MaterialTheme.typography.titleSmall)
+                            Text(item.detailText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

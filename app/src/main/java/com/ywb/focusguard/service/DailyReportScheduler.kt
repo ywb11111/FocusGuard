@@ -37,6 +37,29 @@ class DailyReportScheduler @Inject constructor(
         )
     }
 
+    /**
+     * App 启动时调用，确保开关状态与实际任务一致。
+     *
+     * 为什么需要：设置里"每日总结"默认开启，但以前只有用户手动切换开关时才会调用 [setEnabled]，
+     * 从没碰过开关的用户界面显示"已开启"却永远收不到日报。
+     * 这里用 KEEP：已经排好的任务保持原计划，不会因为每次打开 App 而被取消重排。
+     */
+    fun ensureScheduled(enabled: Boolean) {
+        val workManager = WorkManager.getInstance(context)
+        if (!enabled) {
+            workManager.cancelUniqueWork(UNIQUE_WORK_NAME)
+            return
+        }
+        val request = PeriodicWorkRequestBuilder<DailyReportWorker>(24, TimeUnit.HOURS)
+            .setInitialDelay(delayUntilNextReport(), TimeUnit.MILLISECONDS)
+            .build()
+        workManager.enqueueUniquePeriodicWork(
+            UNIQUE_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+    }
+
     /** 计算到下一次本地时间 21:00 的延迟，避免首次开启后立刻弹出“日报”。 */
     private fun delayUntilNextReport(nowMillis: Long = System.currentTimeMillis()): Long {
         val next = Calendar.getInstance().apply {

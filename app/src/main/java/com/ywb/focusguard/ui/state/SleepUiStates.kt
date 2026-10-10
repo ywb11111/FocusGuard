@@ -1,5 +1,6 @@
 package com.ywb.focusguard.ui.state
 
+import com.ywb.focusguard.domain.model.SleepAlarmSettings
 import com.ywb.focusguard.domain.model.SleepDetail
 import com.ywb.focusguard.domain.model.SleepLiveStatus
 import com.ywb.focusguard.domain.model.SleepPlacement
@@ -11,11 +12,15 @@ import com.ywb.focusguard.domain.model.SleepSession
  * @property audioGranted 麦克风权限：没有就无法分析鼾声和噪声。
  * @property notificationGranted 通知权限（Android 13+）：没有时前台服务仍能运行，但用户看不到状态和结束按钮。
  * @property batteryOptimizationIgnored 是否已关闭电池优化：国产 ROM 上不关闭，半夜很容易被系统清理。
+ * @property exactAlarmAllowed 是否允许精确闹钟（Android 12+），不允许时闹钟可能晚响几分钟。
+ * @property fullScreenAllowed 是否允许全屏通知（Android 14+），不允许时锁屏只显示悬浮通知、不会全屏弹出。
  */
 data class SleepChecklist(
     val audioGranted: Boolean = false,
     val notificationGranted: Boolean = false,
-    val batteryOptimizationIgnored: Boolean = false
+    val batteryOptimizationIgnored: Boolean = false,
+    val exactAlarmAllowed: Boolean = true,
+    val fullScreenAllowed: Boolean = true
 )
 
 /**
@@ -36,12 +41,14 @@ sealed interface SleepUiState {
      * @property checklist 睡前检查项。
      * @property recentSessions 最近 7 晚记录，按时间倒序。
      * @property trendScores 最近 7 晚评分，按时间正序，供趋势图使用。
+     * @property alarm 智能闹钟设置。
      */
     data class Ready(
         val placement: SleepPlacement,
         val checklist: SleepChecklist,
         val recentSessions: List<SleepSession>,
-        val trendScores: List<Float>
+        val trendScores: List<Float>,
+        val alarm: SleepAlarmSettings = SleepAlarmSettings()
     ) : SleepUiState
 
     /**
@@ -49,10 +56,14 @@ sealed interface SleepUiState {
      *
      * @property session Room 中进行中的记录。
      * @property live Service 发布的实时状态；Service 刚启动时可能为 null。
+     * @property alarmWindowText 今晚闹钟的时间段文案，例如"07:00–07:30"；没开闹钟时为 null。
+     * @property alarmRinging 闹钟是否正在响；通知被屏蔽时用户也能在这里关掉。
      */
     data class Recording(
         val session: SleepSession,
-        val live: SleepLiveStatus?
+        val live: SleepLiveStatus?,
+        val alarmWindowText: String? = null,
+        val alarmRinging: Boolean = false
     ) : SleepUiState
 
     /**

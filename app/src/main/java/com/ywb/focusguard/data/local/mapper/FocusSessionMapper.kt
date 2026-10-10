@@ -17,7 +17,8 @@ fun FocusSessionEntity.toDomain(): FocusSession = FocusSession(
     movementCount = movementCount,
     distractionCount = distractionCount,
     score = score,
-    note = note
+    note = note,
+    distractionTracked = distractionTracked
 )
 
 /** 将领域模型转换为 Room 实体，适用于完整会话的持久化。 */
@@ -32,5 +33,6 @@ fun FocusSession.toEntity(): FocusSessionEntity = FocusSessionEntity(
     movementCount = movementCount,
     distractionCount = distractionCount,
     score = score,
-    note = note
+    note = note,
+    distractionTracked = distractionTracked
 )

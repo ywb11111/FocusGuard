@@ -1,5 +1,6 @@
 package com.ywb.focusguard.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -17,6 +18,9 @@ import androidx.room.PrimaryKey
  * @property distractionCount 专注期间离开应用等分心行为的次数。
  * @property score 根据环境和专注行为计算出的总分，范围 0 到 100。
  * @property note 用户备注或系统生成的会话状态说明。
+ * @property distractionTracked 这场会话是否开启了分心检测（有使用情况访问权限）。
+ *   用来区分"0 次分心"和"根本没检测"，避免把未检测展示成表现完美。
+ *   数据库版本 3 新增，老数据迁移时默认 0（未检测）；@ColumnInfo 的默认值必须与迁移 SQL 一致。
  */
 @Entity(tableName = "focus_sessions")
 data class FocusSessionEntity(
@@ -31,5 +35,7 @@ data class FocusSessionEntity(
     val movementCount: Int,
     val distractionCount: Int,
     val score: Int,
-    val note: String?
+    val note: String?,
+    @ColumnInfo(defaultValue = "0")
+    val distractionTracked: Boolean = false
 )

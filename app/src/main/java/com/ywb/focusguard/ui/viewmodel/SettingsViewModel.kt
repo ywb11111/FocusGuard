@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ywb.focusguard.data.repository.SettingsRepository
 import com.ywb.focusguard.service.DailyReportScheduler
+import com.ywb.focusguard.service.WeeklyInsightScheduler
 import com.ywb.focusguard.ui.state.SettingsUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,7 +21,9 @@ class SettingsViewModel @Inject constructor(
     /** 提供权限状态检查。 */
     private val permissionManager: PermissionManager,
     /** 把“每日总结”设置转换为唯一的 WorkManager 周期任务。 */
-    private val dailyReportScheduler: DailyReportScheduler
+    private val dailyReportScheduler: DailyReportScheduler,
+    /** 每周洞察复用“每日总结”开关。 */
+    private val weeklyInsightScheduler: WeeklyInsightScheduler
 ) : ViewModel() {
     // 当前设置仓库还是内存实现；后续接 DataStore 后，这里的 UI 收集方式不用变。
     /** 设置页的生命周期感知状态。 */
@@ -69,6 +72,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.updateDailyReportEnabled(enabled)
             dailyReportScheduler.setEnabled(enabled)
+            weeklyInsightScheduler.setEnabled(enabled)
         }
     }
 }

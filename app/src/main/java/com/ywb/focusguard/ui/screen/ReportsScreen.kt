@@ -17,12 +17,15 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -42,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ywb.focusguard.domain.model.FocusSession
+import com.ywb.focusguard.domain.model.Insight
+import com.ywb.focusguard.domain.model.InsightKind
 import com.ywb.focusguard.ui.component.FocusPageHeader
 import com.ywb.focusguard.ui.component.FocusStat
 import com.ywb.focusguard.ui.component.SectionHeader
@@ -51,6 +56,7 @@ import com.ywb.focusguard.ui.state.ReportsUiState
 import com.ywb.focusguard.ui.state.FocusCategorySummary
 import com.ywb.focusguard.ui.theme.FocusBlueSoft
 import com.ywb.focusguard.ui.theme.FocusTealSoft
+import com.ywb.focusguard.ui.viewmodel.InsightsViewModel
 import com.ywb.focusguard.ui.viewmodel.ReportsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -60,18 +66,25 @@ import java.util.Locale
 @Composable
 fun ReportsRoute(
     onOpenSessionDetail: (Long) -> Unit,
-    viewModel: ReportsViewModel = hiltViewModel()
+    viewModel: ReportsViewModel = hiltViewModel(),
+    insightsViewModel: InsightsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    ReportsScreen(uiState, onOpenSessionDetail, viewModel::switchPeriod)
+    val insights by insightsViewModel.insights.collectAsStateWithLifecycle()
+    ReportsScreen(uiState, onOpenSessionDetail, viewModel::switchPeriod, insights)
 }
 
-/** 报告页优先回答“表现如何、主要受什么影响、下一步做什么”。 */
+/**
+ * 报告页优先回答“表现如何、主要受什么影响、下一步做什么”。
+ *
+ * @param insights 睡眠与专注的关联洞察（最近 28 天）；为空时不显示该区块，截图预览沿用旧基线。
+ */
 @Composable
 fun ReportsScreen(
     uiState: ReportsUiState,
     onOpenSessionDetail: (Long) -> Unit,
-    onSwitchPeriod: (ReportPeriod) -> Unit = {}
+    onSwitchPeriod: (ReportPeriod) -> Unit = {},
+    insights: List<Insight> = emptyList()
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -93,9 +106,11 @@ fun ReportsScreen(
 
         if (uiState.sessions.isEmpty()) {
             item { EmptyReport(uiState.period) }
+            if (insights.isNotEmpty()) item { SleepFocusInsights(insights) }
         } else {
             item { SummaryHero(uiState) }
             item { InsightCard(uiState) }
+            if (insights.isNotEmpty()) item { SleepFocusInsights(insights) }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SectionHeader(title = "评分趋势", action = {
@@ -237,6 +252,59 @@ private fun InsightCard(uiState: ReportsUiState) {
                 )
             }
         }
+    }
+}
+
+/**
+ * 睡眠与专注的关联洞察。每条都附上支撑数据，并注明"相关不等于因果"，不夸大结论。
+ */
+@Composable
+private fun SleepFocusInsights(insights: List<Insight>) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SectionHeader(title = "睡眠与专注", action = {
+            Text("最近 28 天", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        })
+        Card(
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                insights.forEachIndexed { index, insight ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(
+                            imageVector = when (insight.kind) {
+                                InsightKind.SLEEP_DURATION, InsightKind.BEDTIME -> Icons.Outlined.Bedtime
+                                InsightKind.SLEEP_TREND -> Icons.Outlined.Insights
+                                InsightKind.BEST_TIME_OF_DAY -> Icons.Outlined.Schedule
+                                InsightKind.NEED_MORE_DATA -> Icons.Outlined.HourglassEmpty
+                            },
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(insight.title, style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                insight.detail,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    if (index != insights.lastIndex) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                }
+            }
+        }
+        Text(
+            "以上是相关性统计，不代表因果；记录越多结论越可靠。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

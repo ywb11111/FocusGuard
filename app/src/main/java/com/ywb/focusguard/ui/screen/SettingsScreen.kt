@@ -1,7 +1,9 @@
 package com.ywb.focusguard.ui.screen
 
 import android.Manifest
+import android.content.Intent
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -22,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccessTime
+import androidx.compose.material.icons.outlined.AppBlocking
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.GraphicEq
@@ -30,6 +33,7 @@ import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.QueryStats
+import androidx.compose.material.icons.outlined.Sensors
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -40,13 +44,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ywb.focusguard.ui.component.FocusPageHeader
 import com.ywb.focusguard.ui.component.PositiveStatus
@@ -59,9 +64,11 @@ import com.ywb.focusguard.ui.viewmodel.SettingsViewModel
 @Composable
 fun SettingsRoute(
     onOpenPermissionGuide: () -> Unit,
+    onOpenSensorDebug: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val audioPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { viewModel.refreshPermissions() }
@@ -69,11 +76,20 @@ fun SettingsRoute(
         ActivityResultContracts.RequestPermission()
     ) { viewModel.refreshPermissions() }
 
-    LaunchedEffect(Unit) { viewModel.refreshPermissions() }
+    // 每次回到页面都刷新：使用情况访问权限是在系统设置里开的，没有授权回调，只能靠 onResume 重新检查
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshPermissions()
+        onPauseOrDispose { }
+    }
 
     SettingsScreen(
         uiState = uiState,
         onOpenPermissionGuide = onOpenPermissionGuide,
+        onRequestUsageAccess = {
+            // 系统没有弹窗授权方式，只能跳到"使用情况访问"列表让用户手动打开
+            runCatching { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
+        },
+        onOpenSensorDebug = onOpenSensorDebug,
         onRequestAudioPermission = { audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
         onRequestNotificationPermission = {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -87,11 +103,18 @@ fun SettingsRoute(
     )
 }
 
-/** 设置项按“专注偏好、后台能力、权限与隐私”分组，所有可见开关均真实可操作。 */
+/**
+ * 设置项按“专注偏好、后台能力、权限与隐私、开发者”分组，所有可见开关均真实可操作。
+ *
+ * @param onRequestUsageAccess 打开分心检测授权页；为 null 时不显示该行（截图预览沿用旧基线）。
+ * @param onOpenSensorDebug 打开传感器调试页；为 null 时不显示"开发者"分组。
+ */
 @Composable
 fun SettingsScreen(
     uiState: SettingsUiState,
     onOpenPermissionGuide: () -> Unit,
+    onRequestUsageAccess: (() -> Unit)? = null,
+    onOpenSensorDebug: (() -> Unit)? = null,
     onRequestAudioPermission: () -> Unit = {},
     onRequestNotificationPermission: () -> Unit = {},
     onUpdateDefaultFocusMinutes: (Int) -> Unit = {},
@@ -204,6 +227,16 @@ fun SettingsScreen(
                 granted = uiState.permissionState.notificationGranted,
                 onRequest = onRequestNotificationPermission
             )
+            onRequestUsageAccess?.let { requestUsageAccess ->
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                PermissionSettingRow(
+                    icon = Icons.Outlined.AppBlocking,
+                    label = "分心检测",
+                    supporting = "统计专注期间切到了哪些 App，只在本机分析",
+                    granted = uiState.permissionState.usageStatsGranted,
+                    onRequest = requestUsageAccess
+                )
+            }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             ValueSettingRow(
                 icon = Icons.Outlined.PrivacyTip,
@@ -212,6 +245,18 @@ fun SettingsScreen(
                 value = "",
                 onClick = onOpenPermissionGuide
             )
+        }
+
+        onOpenSensorDebug?.let { openSensorDebug ->
+            SettingsSection("开发者") {
+                ValueSettingRow(
+                    icon = Icons.Outlined.Sensors,
+                    label = "传感器调试",
+                    supporting = "实时查看体动、声音和阈值，导出睡眠数据用于校准",
+                    value = "",
+                    onClick = openSensorDebug
+                )
+            }
         }
 
         Text(

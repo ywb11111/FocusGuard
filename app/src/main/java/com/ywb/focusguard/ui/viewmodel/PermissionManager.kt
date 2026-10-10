@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import com.ywb.focusguard.data.system.hasUsageStatsPermission
 import com.ywb.focusguard.domain.model.PermissionState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,7 +21,7 @@ import javax.inject.Singleton
  * 当前检查三类权限：
  * - RECORD_AUDIO：噪声检测需要
  * - POST_NOTIFICATIONS：前台服务通知需要（Android 13+）
- * - PACKAGE_USAGE_STATS：后续统计专注期间切 App 使用
+ * - PACKAGE_USAGE_STATS：分心检测，统计专注期间切到了哪些 App
  *
  * 设计为 Singleton，可在多个 ViewModel 间共享权限状态。
  */
@@ -58,15 +59,21 @@ class PermissionManager @Inject constructor(
     }
 
     /**
+     * 检查使用情况访问权限（分心检测需要）。
+     * 这是 AppOps 特殊权限，只能引导用户去系统设置开启，授权状态也要通过 AppOps 查询。
+     */
+    fun isUsageStatsGranted(): Boolean = context.hasUsageStatsPermission()
+
+    /**
      * 刷新所有权限状态，通常在 onResume 或权限回调后调用。
-     *
-     * 使用情况权限需要特殊处理（引导用户去设置），这里暂不检查。
+     * 使用情况访问权限没有授权回调，用户从系统设置返回后靠这里重新检查。
      */
     fun refreshPermissionState() {
         _permissionState.update { current ->
             current.copy(
                 audioGranted = isAudioPermissionGranted(),
-                notificationGranted = isNotificationPermissionGranted()
+                notificationGranted = isNotificationPermissionGranted(),
+                usageStatsGranted = isUsageStatsGranted()
             )
         }
     }

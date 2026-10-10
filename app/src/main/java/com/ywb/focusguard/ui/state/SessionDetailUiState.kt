@@ -43,9 +43,22 @@ sealed interface SessionDetailUiState {
         val startedAt: Long = 0L,
         val averageNoiseText: String = "-- dB",
         val averageLightText: String = "-- lux",
-        val distractionCount: Int = 0
+        val distractionCount: Int = 0,
+        val distractionTracked: Boolean = false,
+        val distractionItems: List<DistractionItemUi> = emptyList()
     ) : SessionDetailUiState
 }
+
+/**
+ * 分心明细中的一行，文案已格式化。
+ *
+ * @property appLabel App 名称。
+ * @property detailText 例如"3 次 · 6 分钟"。
+ */
+data class DistractionItemUi(
+    val appLabel: String,
+    val detailText: String
+)
 
 /** 把领域模型整理成 UI 展示模型，避免 Composable 混入字符串拼接和格式化逻辑。 */
 fun SessionDetail.toUiState(): SessionDetailUiState.Content = SessionDetailUiState.Content(
@@ -61,5 +74,11 @@ fun SessionDetail.toUiState(): SessionDetailUiState.Content = SessionDetailUiSta
     startedAt = session.startTime,
     averageNoiseText = "${session.averageNoiseDb.toInt()} dB",
     averageLightText = "${session.averageLightLux.toInt()} lux",
-    distractionCount = session.distractionCount
+    distractionCount = session.distractionCount,
+    distractionTracked = session.distractionTracked,
+    distractionItems = distractions.map { summary ->
+        val seconds = summary.totalMillis / 1_000L
+        val durationText = if (seconds >= 60) "${seconds / 60} 分钟" else "$seconds 秒"
+        DistractionItemUi(appLabel = summary.appLabel, detailText = "${summary.count} 次 · $durationText")
+    }
 )

@@ -16,6 +16,7 @@ import androidx.navigation.navArgument
 import com.ywb.focusguard.ui.screen.OnboardingScreen
 import com.ywb.focusguard.ui.screen.PermissionGuideScreen
 import com.ywb.focusguard.ui.screen.ReportsRoute
+import com.ywb.focusguard.ui.screen.SensorDebugRoute
 import com.ywb.focusguard.ui.screen.SessionDetailRoute
 import com.ywb.focusguard.ui.screen.SessionRoute
 import com.ywb.focusguard.ui.screen.SettingsRoute
@@ -126,7 +127,8 @@ fun FocusGuardNavHost(
             route = Destination.Settings.route
         ) {
             SettingsRoute(
-                onOpenPermissionGuide = { navController.navigate(Destination.PermissionGuide.route) }
+                onOpenPermissionGuide = { navController.navigate(Destination.PermissionGuide.route) },
+                onOpenSensorDebug = { navController.navigate(Destination.SensorDebug.route) }
             )
         }
         composable(Destination.PermissionGuide.route) {
@@ -157,6 +159,9 @@ fun FocusGuardNavHost(
             })
         ) {
             SleepDetailRoute(onBack = { navController.popBackStack() })
+        }
+        composable(Destination.SensorDebug.route) {
+            SensorDebugRoute(onBack = { navController.popBackStack() })
         }
     }
 }

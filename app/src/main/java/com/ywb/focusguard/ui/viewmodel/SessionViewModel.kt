@@ -3,9 +3,11 @@ package com.ywb.focusguard.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ywb.focusguard.data.repository.DistractionRepository
 import com.ywb.focusguard.data.repository.EnvironmentRepository
 import com.ywb.focusguard.data.repository.FocusRepository
 import com.ywb.focusguard.data.repository.SettingsRepository
+import com.ywb.focusguard.domain.model.ActiveInterval
 import com.ywb.focusguard.domain.model.EnvironmentSnapshot
 import com.ywb.focusguard.domain.model.FocusConfig
 import com.ywb.focusguard.domain.model.FocusCategory
@@ -48,6 +50,8 @@ class SessionViewModel @Inject constructor(
     private val focusRepository: FocusRepository,
     /** 提供默认时长；准备页仍允许用户为本次会话临时选择其他时长。 */
     private val settingsRepository: SettingsRepository,
+    /** 专注结束时根据计时区间分析并保存分心记录。 */
+    private val distractionRepository: DistractionRepository,
     /** Android Application Context，用于启动前台服务。 */
     application: Application
 ) : AndroidViewModel(application) {
@@ -106,6 +110,12 @@ class SessionViewModel @Inject constructor(
     /** 运行期间已确认的移动事件数，用于实时反馈并在暂停/继续时保留。 */
     private var movementCount = 0
 
+    /**
+     * 已结束的计时区间（不含暂停）。每次暂停或结束时把 [runStartedAt] 到当前时间记为一段；
+     * 分心检测只统计这些区间，暂停期间切去别的 App 属于休息，不算分心。
+     */
+    private val activeIntervals = mutableListOf<ActiveInterval>()
+
     /** 订阅通知栏控制事件。 */
     private var controlEventJob: Job? = null
 
@@ -159,6 +169,7 @@ class SessionViewModel @Inject constructor(
             runStartedAt = now
             accumulatedMillis = 0L
             movementCount = 0
+            activeIntervals.clear()
             emitRunningState(elapsedMillis = 0L)
             // 初始化共享状态
             SessionStateHolder.startSession(activeSessionId, targetDurationMillis)
@@ -217,6 +228,7 @@ class SessionViewModel @Inject constructor(
         samplingJob?.cancel()
         motionWatchJob?.cancel()
         accumulatedMillis = current.elapsedMillis
+        closeActiveInterval(System.currentTimeMillis())
         runStartedAt = 0L
         _uiState.value = SessionUiState.Paused(
             sessionId = current.sessionId,
@@ -263,6 +275,7 @@ class SessionViewModel @Inject constructor(
         runStartedAt = 0L
         accumulatedMillis = 0L
         movementCount = 0
+        activeIntervals.clear()
         _uiState.value = SessionUiState.Ready(
             FocusConfig(selectedDurationMinutes, category = selectedCategory),
             environment.value
@@ -368,7 +381,12 @@ class SessionViewModel @Inject constructor(
         SessionStateHolder.updateRemaining(remainingMillis)
     }
 
-    /** 持久化结束结果。 */
+    /**
+     * 持久化结束结果。
+     *
+     * 顺序很重要：先分析并保存分心记录，再调用 finishSession。
+     * finishSession 会从分心表统计次数参与评分，顺序反了分心就不会计入本次评分。
+     */
     private fun completeSession(elapsedMillis: Long) {
         val sessionId = activeSessionId
         if (sessionId == 0L) return
@@ -376,12 +394,23 @@ class SessionViewModel @Inject constructor(
         tickerJob?.cancel()
         samplingJob?.cancel()
         motionWatchJob?.cancel()
+        closeActiveInterval(System.currentTimeMillis())
         runStartedAt = 0L
+        val intervals = activeIntervals.toList()
         SessionStateHolder.endSession()
         FocusMonitorService.stop(getApplication())
         viewModelScope.launch {
+            // 分心检测失败（例如系统服务异常）不能阻断专注结束，最坏情况只是本次显示"未检测"
+            runCatching { distractionRepository.recordSessionDistractions(sessionId, intervals) }
             val session = focusRepository.finishSession(sessionId, elapsedMillis)
             _uiState.value = SessionUiState.Finished(session)
+        }
+    }
+
+    /** 把当前这一轮计时（从 [runStartedAt] 到 [end]）记为一个计时区间；暂停中调用时不记录。 */
+    private fun closeActiveInterval(end: Long) {
+        if (runStartedAt != 0L && end > runStartedAt) {
+            activeIntervals += ActiveInterval(start = runStartedAt, end = end)
         }
     }
 

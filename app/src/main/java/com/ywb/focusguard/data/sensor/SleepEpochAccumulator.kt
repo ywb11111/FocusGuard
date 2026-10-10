@@ -20,8 +20,13 @@ import com.ywb.focusguard.domain.model.SleepEpoch
  */
 class SleepEpochAccumulator(
     epochStart: Long,
-    private val minMotionThreshold: Float = 0.05f
+    private val minMotionThreshold: Float = DEFAULT_MIN_MOTION_THRESHOLD
 ) {
+    companion object {
+        /** 体动阈值下限默认值，单位 m/s²；传感器调试页也展示这个值，便于真机校准时对照。 */
+        const val DEFAULT_MIN_MOTION_THRESHOLD = 0.05f
+    }
+
     /** 当前这一分钟的开始时间。 */
     private var epochStart: Long = epochStart
 
@@ -52,6 +57,10 @@ class SleepEpochAccumulator(
     /** 当前这一分钟的开始时间；Service 结束时据此判断最后不足一分钟的数据是否值得保存。 */
     @Synchronized
     fun currentEpochStart(): Long = epochStart
+
+    /** 读取当前自适应体动阈值，传感器调试页实时展示用。 */
+    @Synchronized
+    fun currentMotionThreshold(): Float = motionThreshold
 
     /** 当前体动阈值：噪声估计的 3 倍，不低于下限。 */
     private val motionThreshold: Float

@@ -2,12 +2,18 @@ package com.ywb.focusguard.di
 
 import android.content.Context
 import androidx.room.Room
+import com.ywb.focusguard.data.local.dao.DistractionDao
 import com.ywb.focusguard.data.local.dao.FocusSessionDao
 import com.ywb.focusguard.data.local.dao.SampleDao
 import com.ywb.focusguard.data.local.dao.SleepDao
 import com.ywb.focusguard.data.local.database.FocusGuardDatabase
 import com.ywb.focusguard.data.local.database.MIGRATION_1_2
+import com.ywb.focusguard.data.local.database.MIGRATION_2_3
 import com.ywb.focusguard.data.repository.DataStoreSettingsRepository
+import com.ywb.focusguard.data.repository.DataStoreSleepAlarmRepository
+import com.ywb.focusguard.data.repository.SleepAlarmRepository
+import com.ywb.focusguard.data.repository.DistractionRepository
+import com.ywb.focusguard.data.repository.DistractionRepositoryImpl
 import com.ywb.focusguard.data.repository.EnvironmentRepository
 import com.ywb.focusguard.data.repository.EnvironmentRepositoryImpl
 import com.ywb.focusguard.data.repository.FocusRepository
@@ -15,9 +21,12 @@ import com.ywb.focusguard.data.repository.FocusRepositoryImpl
 import com.ywb.focusguard.data.repository.SettingsRepository
 import com.ywb.focusguard.data.repository.SleepRepository
 import com.ywb.focusguard.data.repository.SleepRepositoryImpl
+import com.ywb.focusguard.domain.analyzer.DistractionAnalyzer
 import com.ywb.focusguard.domain.analyzer.EnvironmentAnalyzer
 import com.ywb.focusguard.domain.analyzer.FocusScoreAnalyzer
+import com.ywb.focusguard.domain.analyzer.InsightAnalyzer
 import com.ywb.focusguard.domain.analyzer.SleepAnalyzer
+import com.ywb.focusguard.domain.analyzer.SmartAlarmPlanner
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -44,6 +53,16 @@ abstract class RepositoryModule {
     @Singleton
     /** 睡眠 Repository 同时被 SleepMonitorService 和睡眠页面 ViewModel 注入，必须是同一个实例。 */
     abstract fun bindSleepRepository(repository: SleepRepositoryImpl): SleepRepository
+
+    @Binds
+    @Singleton
+    /** 分心检测仓库，由 SessionViewModel 在专注结束时调用。 */
+    abstract fun bindDistractionRepository(repository: DistractionRepositoryImpl): DistractionRepository
+
+    @Binds
+    @Singleton
+    /** 智能闹钟设置，睡眠页和 SleepMonitorService 共用。 */
+    abstract fun bindSleepAlarmRepository(repository: DataStoreSleepAlarmRepository): SleepAlarmRepository
 }
 
 /** 提供无法直接使用构造函数注入的 Room 和无状态 Analyzer 对象。 */
@@ -60,7 +79,7 @@ object AppModule {
             "focus_guard.db"
         )
             // 数据库每升级一个版本都要在这里注册迁移，老用户升级时才能保留已有专注记录
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .build()
 
     @Provides
@@ -85,6 +104,27 @@ object AppModule {
     @Singleton
     /** 睡眠分析器无可变状态，可作为全局单例复用。 */
     fun provideSleepAnalyzer(): SleepAnalyzer = SleepAnalyzer()
+
+    @Provides
+    @Singleton
+    /** 从单例数据库获取分心记录 DAO。 */
+    fun provideDistractionDao(database: FocusGuardDatabase): DistractionDao =
+        database.distractionDao()
+
+    @Provides
+    @Singleton
+    /** 分心分析器无可变状态，可作为全局单例复用。 */
+    fun provideDistractionAnalyzer(): DistractionAnalyzer = DistractionAnalyzer()
+
+    @Provides
+    @Singleton
+    /** 智能闹钟规划器无可变状态，可作为全局单例复用。 */
+    fun provideSmartAlarmPlanner(): SmartAlarmPlanner = SmartAlarmPlanner()
+
+    @Provides
+    @Singleton
+    /** 洞察分析器无可变状态，报告页和每周推送共用。 */
+    fun provideInsightAnalyzer(): InsightAnalyzer = InsightAnalyzer()
 
     @Provides
     @Singleton

@@ -53,6 +53,9 @@ sealed class Destination(val route: String) {
 
         fun createRoute(sleepId: Long) = "sleep_detail/$sleepId"
     }
+
+    /** 传感器调试页，从设置页"开发者"分组进入，用于真机校准阈值。 */
+    data object SensorDebug : Destination("sensor_debug")
 }
 
 /**

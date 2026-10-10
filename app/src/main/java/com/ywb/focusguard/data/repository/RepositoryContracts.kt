@@ -1,5 +1,6 @@
 package com.ywb.focusguard.data.repository
 
+import com.ywb.focusguard.domain.model.ActiveInterval
 import com.ywb.focusguard.domain.model.EnvironmentSnapshot
 import com.ywb.focusguard.domain.model.FocusConfig
 import com.ywb.focusguard.domain.model.FocusSession
@@ -7,6 +8,7 @@ import com.ywb.focusguard.domain.model.LightSample
 import com.ywb.focusguard.domain.model.MotionSample
 import com.ywb.focusguard.domain.model.NoiseSample
 import com.ywb.focusguard.domain.model.SessionDetail
+import com.ywb.focusguard.domain.model.SleepAlarmSettings
 import com.ywb.focusguard.domain.model.SleepDetail
 import com.ywb.focusguard.domain.model.SleepEpoch
 import com.ywb.focusguard.domain.model.SleepPlacement
@@ -132,4 +134,37 @@ interface SleepRepository {
      * 结束时间取最后一分钟数据的结束时间，避免把中断后没有数据的几个小时算进报告。
      */
     suspend fun finishInterruptedSession(sessionId: Long): SleepSession?
+}
+
+/**
+ * 分心检测的数据边界。
+ *
+ * SessionViewModel 在专注结束时调用 [recordSessionDistractions]，
+ * 之后 FocusRepository.finishSession 再从数据库统计分心次数参与评分——和噪声、光照采样的"先存后聚合"一致。
+ */
+interface DistractionRepository {
+    /** 是否已获得使用情况访问权限。 */
+    fun hasPermission(): Boolean
+
+    /**
+     * 分析并保存一场专注的分心记录。
+     *
+     * @param intervals 真正在计时的区间（不含暂停时间）。
+     * @return 是否完成检测；未授权时返回 false，会话保持"未检测"状态。
+     */
+    suspend fun recordSessionDistractions(sessionId: Long, intervals: List<ActiveInterval>): Boolean
+}
+
+/**
+ * 智能闹钟设置的数据边界。
+ *
+ * 单独一个仓库而不是往 SettingsRepository 里加字段：闹钟只属于睡眠功能，
+ * 拆开后不需要改动已有的设置接口、实现和测试。
+ */
+interface SleepAlarmRepository {
+    /** 持续发射最新闹钟设置。 */
+    val settings: Flow<SleepAlarmSettings>
+
+    /** 整体保存闹钟设置。 */
+    suspend fun update(settings: SleepAlarmSettings)
 }
