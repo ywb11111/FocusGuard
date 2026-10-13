@@ -10,6 +10,12 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -71,6 +77,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -86,7 +93,12 @@ import com.ywb.focusguard.ui.component.FocusDivider
 import com.ywb.focusguard.ui.component.FocusPageHeader
 import com.ywb.focusguard.ui.component.InteractiveLineChart
 import com.ywb.focusguard.ui.component.PositiveStatus
+import com.ywb.focusguard.ui.component.DeferUntilTransitionEnd
 import com.ywb.focusguard.ui.component.SectionHeader
+import com.ywb.focusguard.ui.component.TREND_CHART_HEIGHT
+import com.ywb.focusguard.ui.component.monitoringPermissions
+import com.ywb.focusguard.ui.component.staggeredEnter
+import com.ywb.focusguard.ui.component.rememberRunAfterPermissions
 import com.ywb.focusguard.ui.state.SleepChecklist
 import com.ywb.focusguard.ui.state.SleepUiState
 import com.ywb.focusguard.ui.theme.FocusAmberSoft
@@ -129,6 +141,12 @@ fun SleepRoute(
         onPauseOrDispose { }
     }
 
+    // 点击"开始睡眠监测"时先补齐麦克风 / 通知权限：服务启动时按此刻的授权决定是否分析声音
+    val startWithPermissions = rememberRunAfterPermissions(remember { monitoringPermissions() }) {
+        viewModel.refreshChecklist()
+        viewModel.startSleep()
+    }
+
     // 记录分析完成后跳转报告页；事件来自 Channel，只会被消费一次
     LaunchedEffect(Unit) {
         viewModel.finishedEvents.collect { sleepId -> onOpenDetail(sleepId) }
@@ -145,7 +163,7 @@ fun SleepRoute(
             }
         },
         onOpenBatterySettings = { openBatteryOptimizationSettings(context) },
-        onStart = viewModel::startSleep,
+        onStart = startWithPermissions,
         onStop = viewModel::stopSleep,
         onFinishInterrupted = viewModel::finishInterrupted,
         onOpenDetail = onOpenDetail,
@@ -305,7 +323,10 @@ private fun SleepReadyContent(
                     }
                 )
                 Spacer(Modifier.height(8.dp))
-                InteractiveLineChart(values = state.trendScores)
+                // 睡眠页是从今日页滑入的，等滑入结束再画图表，转场和曲线入场各自流畅
+                DeferUntilTransitionEnd(enabled = true, placeholderHeight = TREND_CHART_HEIGHT) {
+                    InteractiveLineChart(values = state.trendScores)
+                }
                 Spacer(Modifier.height(10.dp))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -314,8 +335,10 @@ private fun SleepReadyContent(
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                         state.recentSessions.forEachIndexed { index, session ->
-                            if (index > 0) FocusDivider()
-                            SleepHistoryRow(session = session, onClick = { onOpenDetail(session.id) })
+                            Column(Modifier.staggeredEnter(index, enabled = true)) {
+                                if (index > 0) FocusDivider()
+                                SleepHistoryRow(session = session, onClick = { onOpenDetail(session.id) })
+                            }
                         }
                     }
                 }
@@ -655,6 +678,19 @@ private fun SleepRecordingContent(
     val now by rememberMinuteClock()
     val elapsedMinutes = ((now - state.session.startTime) / 60_000L).coerceAtLeast(0L)
     val live = state.live
+    /**
+     * 月亮图标缓慢"呼吸"：透明度在 0.35~0.85 之间往复，一个周期约 6.4 秒，接近放松时的呼吸节奏。
+     * 只改透明度并在 graphicsLayer 里读取，夜间也不刺眼；离开页面时无限动画随组合一起停止。
+     */
+    val breath by rememberInfiniteTransition(label = "moon-breath").animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3_200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "moon-alpha"
+    )
 
     Box(
         modifier = Modifier
@@ -671,8 +707,10 @@ private fun SleepRecordingContent(
             Icon(
                 Icons.Outlined.NightsStay,
                 contentDescription = null,
-                tint = FocusDarkInkMuted,
-                modifier = Modifier.size(40.dp)
+                tint = FocusDarkInk,
+                modifier = Modifier
+                    .size(40.dp)
+                    .graphicsLayer { alpha = breath }
             )
             Spacer(Modifier.height(16.dp))
             Text(clockText(now), style = MaterialTheme.typography.displayLarge, color = FocusDarkInk)

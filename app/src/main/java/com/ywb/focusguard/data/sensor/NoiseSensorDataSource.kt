@@ -55,19 +55,20 @@ class NoiseSensorDataSource @Inject constructor(
     /**
      * 观察环境噪声。
      *
-     * **权限检查**：如果没有录音权限，返回一条默认样本后结束 Flow。
+     * **权限检查**：没有录音权限时先发一条默认样本，然后每秒检查一次授权，授权后立即开始采集。
+     * 以前是发完默认样本就结束 Flow：用户在页面上点了"允许"，Flow 却已经结束，噪声会一直显示 0，
+     * 直到离开页面超过 5 秒、数据流重启才恢复。
      *
      * **采样频率**：AudioRecord 持续读取，但每 500ms 发射一次样本，
      * 避免高频发射导致 UI 频繁重组。
      */
     fun observeNoise(): Flow<NoiseSample> = callbackFlow {
         // 检查权限
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
-            Log.w(TAG, "没有录音权限，返回默认样本")
+        if (!hasAudioPermission()) {
+            Log.w(TAG, "没有录音权限，等待用户授权")
             trySend(defaultSample())
-            close()
-            return@callbackFlow
+            // 页面离开时收集被取消，delay 抛出取消异常并退出等待，不会空转
+            while (isActive && !hasAudioPermission()) delay(1_000)
         }
 
         // 创建 AudioRecord
@@ -154,6 +155,11 @@ class NoiseSensorDataSource @Inject constructor(
         // 调整到人类可感知范围（0-100 dB）
         return (db + 90).coerceIn(0f, 100f)
     }
+
+    /** 是否已获得录音权限。 */
+    private fun hasAudioPermission(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
 
     /** 无权限或初始化失败时的默认样本。 */
     private fun defaultSample(): NoiseSample = NoiseSample(

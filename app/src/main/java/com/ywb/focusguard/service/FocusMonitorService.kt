@@ -1,5 +1,6 @@
 package com.ywb.focusguard.service
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,12 +8,15 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import com.ywb.focusguard.MainActivity
 import com.ywb.focusguard.R
 import dagger.hilt.android.AndroidEntryPoint
@@ -23,6 +27,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import java.util.Locale
+
+private const val TAG = "FocusMonitorService"
 
 /**
  * 专注期间的前台服务，保证 App 切后台后传感器继续采集。
@@ -123,18 +129,12 @@ class FocusMonitorService : Service() {
 
         // 启动前台服务
         val notification = buildNotification("专注进行中", formatTime(remainingMillis))
-        // API 30 之前没有前台服务类型参数；传 0 由 ServiceCompat 按旧系统方式处理。
-        val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-        } else {
-            0
+        if (!enterForeground(notification)) {
+            // 所有类型都失败时不再崩溃：专注计时在页面里照常进行，只是切到后台后不再有前台服务保活
+            Log.e(TAG, "无法进入前台，专注将仅在前台计时")
+            stopSelf()
+            return START_NOT_STICKY
         }
-        ServiceCompat.startForeground(
-            this,
-            NOTIFICATION_ID,
-            notification,
-            serviceType
-        )
 
         // 启动内部计时
         startInternalTicker()
@@ -152,6 +152,47 @@ class FocusMonitorService : Service() {
         stateObserverJob?.cancel()
         notificationManager.cancel(NOTIFICATION_ID)
         super.onDestroy()
+    }
+
+    /**
+     * 按候选类型依次尝试进入前台，成功一个即返回。
+     *
+     * **为什么不能固定用 microphone 类型（之前开始专注闪退的根因）**：
+     * Android 14 起，系统在 startForeground 时会检查"类型对应的运行时权限是否真的已授予"。
+     * microphone 类型要求 RECORD_AUDIO 已授权，用户拒绝或从没授权麦克风时直接抛 SecurityException，
+     * 以前这里没有兜底，于是一点"开始专注"就崩溃。
+     *
+     * 现在：有麦克风权限用 microphone（切后台后还能继续测噪声）；没有就用 health
+     * （其前置条件由 Manifest 里声明的 HIGH_SAMPLING_RATE_SENSORS 满足，专注时仍会采集光照和移动）。
+     *
+     * @return 是否成功进入前台。
+     */
+    private fun enterForeground(notification: Notification): Boolean {
+        val audioGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        val candidates = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> buildList {
+                if (audioGranted) add(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+                add(ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
+            }
+            // Android 11~13：后台用麦克风需要 microphone 类型，但系统还不检查权限；没有麦克风权限时不声明类型
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> buildList {
+                if (audioGranted) add(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+                add(0)
+            }
+            // Android 10 及以下没有前台服务类型参数，传 0 由 ServiceCompat 按旧方式处理
+            else -> listOf(0)
+        }
+        for (type in candidates) {
+            try {
+                ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, type)
+                return true
+            } catch (e: RuntimeException) {
+                // SecurityException、ForegroundServiceStartNotAllowedException 等都继承自 RuntimeException
+                Log.w(TAG, "前台服务类型 $type 启动失败，尝试降级", e)
+            }
+        }
+        return false
     }
 
     // ==================== 内部计时逻辑 ====================

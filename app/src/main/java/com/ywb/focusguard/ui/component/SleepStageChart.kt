@@ -1,5 +1,8 @@
 package com.ywb.focusguard.ui.component
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,12 +16,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -89,6 +95,15 @@ fun SleepStageChart(
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val segments = remember(stages) { mergeStageSegments(stages) }
     val lanes = listOf(SleepStage.AWAKE, SleepStage.RESTLESS, SleepStage.CALM)
+    val inspectionMode = LocalInspectionMode.current
+    /**
+     * 入场展开进度 0..1：色块按时间顺序从左往右出现，像"回放"这一晚。
+     * 只在绘制阶段读取，动画期间不触发重组；截图预览直接显示完整图。
+     */
+    val reveal = remember { Animatable(if (inspectionMode) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (reveal.value < 1f) reveal.animateTo(1f, tween(durationMillis = 900, easing = FastOutSlowInEasing))
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -122,22 +137,25 @@ fun SleepStageChart(
 
                 val barHeight = laneHeight * 0.64f
                 val corner = CornerRadius(3.dp.toPx())
-                segments.forEach { segment ->
-                    val lane = lanes.indexOf(segment.stage)
-                    val color = when (segment.stage) {
-                        SleepStage.AWAKE -> awakeColor
-                        SleepStage.RESTLESS -> restlessColor
-                        SleepStage.CALM -> calmColor
+                // 只裁剪色块，泳道分隔线始终完整显示
+                clipRect(right = size.width * reveal.value) {
+                    segments.forEach { segment ->
+                        val lane = lanes.indexOf(segment.stage)
+                        val color = when (segment.stage) {
+                            SleepStage.AWAKE -> awakeColor
+                            SleepStage.RESTLESS -> restlessColor
+                            SleepStage.CALM -> calmColor
+                        }
+                        val left = segment.start * minuteWidth
+                        // 至少 1px 宽，保证 1 分钟的短段在很长的夜里也看得见
+                        val width = ((segment.endExclusive - segment.start) * minuteWidth).coerceAtLeast(1f)
+                        drawRoundRect(
+                            color = color,
+                            topLeft = Offset(left, lane * laneHeight + (laneHeight - barHeight) / 2f),
+                            size = Size(width, barHeight),
+                            cornerRadius = corner
+                        )
                     }
-                    val left = segment.start * minuteWidth
-                    // 至少 1px 宽，保证 1 分钟的短段在很长的夜里也看得见
-                    val width = ((segment.endExclusive - segment.start) * minuteWidth).coerceAtLeast(1f)
-                    drawRoundRect(
-                        color = color,
-                        topLeft = Offset(left, lane * laneHeight + (laneHeight - barHeight) / 2f),
-                        size = Size(width, barHeight),
-                        cornerRadius = corner
-                    )
                 }
             }
         }

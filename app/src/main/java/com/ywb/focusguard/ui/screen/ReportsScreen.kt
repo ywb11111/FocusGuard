@@ -37,7 +37,9 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -47,10 +49,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ywb.focusguard.domain.model.FocusSession
 import com.ywb.focusguard.domain.model.Insight
 import com.ywb.focusguard.domain.model.InsightKind
+import com.patrykandpatrick.vico.compose.cartesian.data.CartesianChartModelProducer
+import com.ywb.focusguard.ui.component.AnimatedCountText
+import com.ywb.focusguard.ui.component.DeferUntilTransitionEnd
 import com.ywb.focusguard.ui.component.FocusPageHeader
 import com.ywb.focusguard.ui.component.FocusStat
 import com.ywb.focusguard.ui.component.SectionHeader
 import com.ywb.focusguard.ui.component.InteractiveLineChart
+import com.ywb.focusguard.ui.component.TREND_CHART_HEIGHT
+import com.ywb.focusguard.ui.component.staggeredEnter
 import com.ywb.focusguard.ui.state.ReportPeriod
 import com.ywb.focusguard.ui.state.ReportsUiState
 import com.ywb.focusguard.ui.state.FocusCategorySummary
@@ -71,20 +78,35 @@ fun ReportsRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val insights by insightsViewModel.insights.collectAsStateWithLifecycle()
-    ReportsScreen(uiState, onOpenSessionDetail, viewModel::switchPeriod, insights)
+    // 本次进入是否播放入场动画：只在 ViewModel 生命周期内第一次看到报告时播放。
+    // 用 remember 固定在这次组合里，随后立刻标记已播放；切 Tab 回来时页面重新组合，读到的就是 false。
+    val playIntro = remember { !viewModel.trendIntroPlayed }
+    LaunchedEffect(Unit) { viewModel.markTrendIntroPlayed() }
+    ReportsScreen(
+        uiState = uiState,
+        onOpenSessionDetail = onOpenSessionDetail,
+        onSwitchPeriod = viewModel::switchPeriod,
+        insights = insights,
+        trendModelProducer = viewModel.trendModelProducer,
+        playIntro = playIntro
+    )
 }
 
 /**
  * 报告页优先回答“表现如何、主要受什么影响、下一步做什么”。
  *
  * @param insights 睡眠与专注的关联洞察（最近 28 天）；为空时不显示该区块，截图预览沿用旧基线。
+ * @param trendModelProducer ViewModel 持有的趋势图数据容器；为 null 时（截图预览）按 trendValues 自建。
+ * @param playIntro 是否播放入场动画：数字滚动、列表错峰淡入、图表在转场结束后从零长出。
  */
 @Composable
 fun ReportsScreen(
     uiState: ReportsUiState,
     onOpenSessionDetail: (Long) -> Unit,
     onSwitchPeriod: (ReportPeriod) -> Unit = {},
-    insights: List<Insight> = emptyList()
+    insights: List<Insight> = emptyList(),
+    trendModelProducer: CartesianChartModelProducer? = null,
+    playIntro: Boolean = false
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -105,10 +127,11 @@ fun ReportsScreen(
         }
 
         if (uiState.sessions.isEmpty()) {
-            item { EmptyReport(uiState.period) }
+            // 数据还没从 Room 返回时什么都不画，避免先闪一下"暂无记录"再跳成真实内容
+            if (uiState.isLoaded) item { EmptyReport(uiState.period) }
             if (insights.isNotEmpty()) item { SleepFocusInsights(insights) }
         } else {
-            item { SummaryHero(uiState) }
+            item { SummaryHero(uiState, playIntro) }
             item { InsightCard(uiState) }
             if (insights.isNotEmpty()) item { SleepFocusInsights(insights) }
             item {
@@ -121,7 +144,18 @@ fun ReportsScreen(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            InteractiveLineChart(values = uiState.trendValues)
+                            if (trendModelProducer == null) {
+                                InteractiveLineChart(values = uiState.trendValues)
+                            } else {
+                                // 第一次进入时等转场结束再画图表，避免转场与图表入场动画挤在同一时段掉帧
+                                DeferUntilTransitionEnd(enabled = playIntro, placeholderHeight = TREND_CHART_HEIGHT) {
+                                    InteractiveLineChart(
+                                        values = uiState.trendValues,
+                                        modelProducer = trendModelProducer,
+                                        animateIn = playIntro
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -138,7 +172,9 @@ fun ReportsScreen(
                 ) {
                     Column {
                         uiState.sessions.forEachIndexed { index, session ->
-                            SessionListRow(session) { onOpenSessionDetail(session.id) }
+                            Box(Modifier.staggeredEnter(index, enabled = playIntro)) {
+                                SessionListRow(session) { onOpenSessionDetail(session.id) }
+                            }
                             if (index != uiState.sessions.lastIndex) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -203,8 +239,11 @@ private fun CategoryBreakdown(summaries: List<FocusCategorySummary>) {
     }
 }
 
+/**
+ * 本期汇总。总时长和平均分在第一次进入时从 0 滚动到实际值；之后切换周/月，数字从旧值平滑过渡到新值。
+ */
 @Composable
-private fun SummaryHero(uiState: ReportsUiState) {
+private fun SummaryHero(uiState: ReportsUiState, playIntro: Boolean) {
     val summary = uiState.periodSummary
     Card(
         shape = RoundedCornerShape(20.dp),
@@ -214,11 +253,21 @@ private fun SummaryHero(uiState: ReportsUiState) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Column {
                     Text("${uiState.period.label}专注", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(formatDurationCompact(summary.totalFocusMillis), style = MaterialTheme.typography.headlineLarge)
+                    AnimatedCountText(
+                        target = (summary.totalFocusMillis / 60_000L).toInt(),
+                        animateFromZero = playIntro,
+                        style = MaterialTheme.typography.headlineLarge,
+                        format = { minutes -> formatDurationCompact(minutes * 60_000L) }
+                    )
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text("平均评分", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(summary.averageScore.toString(), style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
+                    AnimatedCountText(
+                        target = summary.averageScore,
+                        animateFromZero = playIntro,
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
             Row(modifier = Modifier.fillMaxWidth()) {

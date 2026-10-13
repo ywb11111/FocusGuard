@@ -52,9 +52,15 @@
     </queries>
 
     <!-- Hilt 要求 Application 使用 @HiltAndroidApp 的实现类。 -->
+    <!--
+        enableOnBackInvokedCallback：开启预测性返回。Android 14+ 上返回手势滑到一半就能预览上一页，
+        Navigation Compose 会把 NavHost 里定义的返回转场变成可跟手拖动的动画；旧系统忽略此属性。
+        项目里没有重写 onBackPressed，返回事件都走 OnBackPressedDispatcher，可以安全开启。
+    -->
     <application
         android:name=".FocusGuardApplication"
         android:allowBackup="true"
+        android:enableOnBackInvokedCallback="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -104,11 +110,14 @@
                 android:resource="@xml/focus_guard_widget_info" />
         </receiver>
 
-        <!-- 阶段 5 的后台监测入口，不允许其他 App 直接启动。 -->
+        <!--
+            阶段 5 的后台监测入口，不允许其他 App 直接启动。
+            有麦克风权限时用 microphone；没有时用 health 兜底（Android 14+ 不允许无权限的 microphone 类型，会直接崩溃）。
+        -->
         <service
             android:name=".service.FocusMonitorService"
             android:exported="false"
-            android:foregroundServiceType="microphone" />
+            android:foregroundServiceType="microphone|health" />
 
         <!-- 阶段 7 睡眠监测服务：体动用 health 类型，声音分析用 microphone 类型，运行时按权限组合。 -->
         <service

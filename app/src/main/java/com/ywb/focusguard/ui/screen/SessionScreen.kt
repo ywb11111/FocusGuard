@@ -75,6 +75,8 @@ import com.ywb.focusguard.ui.component.FocusDivider
 import com.ywb.focusguard.ui.component.FocusPageHeader
 import com.ywb.focusguard.ui.component.PositiveStatus
 import com.ywb.focusguard.ui.component.SectionHeader
+import com.ywb.focusguard.ui.component.monitoringPermissions
+import com.ywb.focusguard.ui.component.rememberRunAfterPermissions
 import com.ywb.focusguard.ui.state.SessionUiState
 import com.ywb.focusguard.ui.state.visualPhase
 import com.ywb.focusguard.ui.theme.FocusAmberSoft
@@ -93,9 +95,13 @@ fun SessionRoute(
     LaunchedEffect(initialDurationMinutes) {
         initialDurationMinutes?.let(viewModel::selectDuration)
     }
+    // 点击"开始专注"时先补齐麦克风 / 通知权限再开始；拒绝也照常开始，只是降级运行
+    val startWithPermissions = rememberRunAfterPermissions(remember { monitoringPermissions() }) {
+        viewModel.startSession()
+    }
     SessionScreen(
         uiState = uiState,
-        onStart = viewModel::startSession,
+        onStart = startWithPermissions,
         onSelectDuration = viewModel::selectDuration,
         onSelectCategory = viewModel::selectCategory,
         onPause = viewModel::pauseSession,

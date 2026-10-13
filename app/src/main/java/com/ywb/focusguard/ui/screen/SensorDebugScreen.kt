@@ -235,7 +235,8 @@ fun SensorDebugScreen(
 @Composable
 private fun LiveChart(values: List<Float>) {
     if (values.size >= 2) {
-        SimpleLineChart(values = values)
+        // 实时曲线每 250ms 刷新一次，不需要入场描线动画
+        SimpleLineChart(values = values, animateIn = false)
     } else {
         Text(
             "等待传感器数据…",

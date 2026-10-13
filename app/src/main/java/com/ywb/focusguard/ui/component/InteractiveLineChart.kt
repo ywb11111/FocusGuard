@@ -28,6 +28,9 @@ import com.patrykandpatrick.vico.compose.common.component.rememberTextComponent
 import com.patrykandpatrick.vico.compose.m3.common.rememberM3VicoTheme
 import kotlinx.coroutines.runBlocking
 
+/** 图表高度；DeferUntilTransitionEnd 的占位高度也用它，保证图表出现时布局不跳动。 */
+val TREND_CHART_HEIGHT = 156.dp
+
 /** 带坐标和按压数据标记的报告折线图，模型变化时使用 Vico 的差值动画。 */
 @Composable
 fun InteractiveLineChart(
@@ -35,16 +38,7 @@ fun InteractiveLineChart(
     modifier: Modifier = Modifier
 ) {
     if (values.size < 2) {
-        Box(
-            modifier = modifier.fillMaxWidth().height(132.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            androidx.compose.material3.Text(
-                text = values.firstOrNull()?.let { "本期评分 ${it.toInt()} 分" } ?: "暂无趋势数据",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        TrendChartFallback(values, modifier)
         return
     }
 
@@ -62,11 +56,6 @@ fun InteractiveLineChart(
     } else {
         remember { CartesianChartModelProducer() }
     }
-    val bottomFormatter = remember {
-        CartesianValueFormatter { _, value, _ ->
-            (value.toInt() + 1).toString()
-        }
-    }
 
     if (!inspectionMode) {
         LaunchedEffect(values) {
@@ -76,6 +65,59 @@ fun InteractiveLineChart(
         }
     }
 
+    TrendChartHost(modelProducer = modelProducer, animateIn = !inspectionMode, modifier = modifier)
+}
+
+/**
+ * 使用外部（ViewModel）持有的数据容器的版本，报告页使用。
+ *
+ * 数据由 ViewModel 提前写入容器，页面重新进入时图表能直接画出最终状态；
+ * [animateIn] 只在第一次看到报告时为 true，之后切 Tab 回来不再从零重放入场动画。
+ *
+ * @param values 仅用于少于 2 个点时显示文字提示；真正的图表数据在 [modelProducer] 里。
+ */
+@Composable
+fun InteractiveLineChart(
+    values: List<Float>,
+    modelProducer: CartesianChartModelProducer,
+    animateIn: Boolean,
+    modifier: Modifier = Modifier
+) {
+    if (values.size < 2) {
+        TrendChartFallback(values, modifier)
+        return
+    }
+    TrendChartHost(modelProducer = modelProducer, animateIn = animateIn, modifier = modifier)
+}
+
+/** 数据不足以画折线时的文字提示。 */
+@Composable
+private fun TrendChartFallback(values: List<Float>, modifier: Modifier) {
+    Box(
+        modifier = modifier.fillMaxWidth().height(132.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        androidx.compose.material3.Text(
+            text = values.firstOrNull()?.let { "本期评分 ${it.toInt()} 分" } ?: "暂无趋势数据",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** 两个版本共用的 Vico 图表主体。 */
+@Composable
+private fun TrendChartHost(
+    modelProducer: CartesianChartModelProducer,
+    animateIn: Boolean,
+    modifier: Modifier
+) {
+    val inspectionMode = LocalInspectionMode.current
+    val bottomFormatter = remember {
+        CartesianValueFormatter { _, value, _ ->
+            (value.toInt() + 1).toString()
+        }
+    }
     ProvideVicoTheme(rememberM3VicoTheme()) {
         val marker = rememberDefaultCartesianMarker(label = rememberTextComponent())
         CartesianChartHost(
@@ -91,11 +133,11 @@ fun InteractiveLineChart(
                 marker = marker
             ),
             modelProducer = modelProducer,
-            modifier = modifier.fillMaxWidth().height(156.dp),
+            modifier = modifier.fillMaxWidth().height(TREND_CHART_HEIGHT),
             scrollState = rememberVicoScrollState(scrollEnabled = false),
             zoomState = rememberVicoZoomState(zoomEnabled = false),
             animationSpec = if (inspectionMode) null else tween(durationMillis = 320),
-            animateIn = !inspectionMode
+            animateIn = animateIn && !inspectionMode
         )
     }
 }

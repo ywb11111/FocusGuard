@@ -150,13 +150,16 @@ data class FocusCategorySummary(
  * @property periodSummary 当前周期的聚合统计。
  * @property trendValues 趋势图数据（各会话评分）。
  * @property categorySummaries 按专注用途聚合并按总时长降序排列的数据。
+ * @property isLoaded Room 是否已返回过数据。初始值 false：避免数据还在路上时把"空列表"误显示成"暂无记录"，
+ *   出现先闪空状态、再跳成内容的布局跳动。
  */
 data class ReportsUiState(
     val period: ReportPeriod = ReportPeriod.WEEK,
     val sessions: List<FocusSession> = emptyList(),
     val periodSummary: PeriodSummary = PeriodSummary(),
     val trendValues: List<Float> = emptyList(),
-    val categorySummaries: List<FocusCategorySummary> = emptyList()
+    val categorySummaries: List<FocusCategorySummary> = emptyList(),
+    val isLoaded: Boolean = false
 )
 
 /**
